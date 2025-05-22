@@ -1,0 +1,131 @@
+// src/components/Button/Button.scss
+@use '../../index.scss' as *; // Changed from @import
+.btn {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 400;
+  transition: all 0.15s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+
+  .btn-icon {
+    display: inline-flex;
+    // If icons need specific sizing or alignment
+    // Example: font-size: 1.1em; 
+  }
+
+  &.btn-size-small {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  &.btn-size-normal {
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+
+  // Variants
+  &.btn-primary {
+    background-color: $primary-color;
+    color: white;
+    border-color: $primary-color;
+    &:hover:not(:disabled) {
+      background-color: darken($primary-color, 7%);
+      border-color: darken($primary-color, 10%);
+    }
+  }
+
+  &.btn-secondary {
+    background-color: $secondary-color;
+    color: $text-color; // Assuming text-color is defined globally
+    border-color: $secondary-color;
+    &:hover:not(:disabled) {
+      background-color: darken($secondary-color, 7%);
+      border-color: darken($secondary-color, 10%);
+    }
+  }
+
+  &.btn-sell {
+    background-color: $sell-color;
+    color: white;
+    border-color: $sell-color;
+    &:hover:not(:disabled) {
+      background-color: darken($sell-color, 7%);
+      border-color: darken($sell-color, 10%);
+    }
+  }
+
+  &.btn-tertiary {
+    background-color: $background-light; // Assuming defined globally
+    color: $text-color;
+    border-color: $border-color; // Assuming defined globally
+    &:hover:not(:disabled) {
+      background-color: darken($background-light, 5%);
+    }
+  }
+
+  &.btn-link {
+    background-color: transparent;
+    color: $primary-color;
+    padding: 0;
+    border: none;
+    text-decoration: none; // From global, but good to reinforce if needed
+    &:hover:not(:disabled) {
+      text-decoration: underline;
+      color: darken($primary-color, 10%);
+    }
+  }
+  
+  &.btn-filter {
+    background-color: $background-white;
+    color: $text-color;
+    border: 1px solid $border-color;
+    &.active {
+        background-color: $primary-color;
+        color: white;
+        border-color: $primary-color;
+    }
+    &:hover:not(.active):not(:disabled){
+        background-color: $background-light;
+    }
+  }
+
+  &.btn-icon { // For icon-only buttons
+    background: transparent;
+    border: none;
+    padding: 4px; // Adjust as needed
+    color: $text-light;
+    &:hover:not(:disabled) {
+      color: $text-color;
+      background-color: $background-light; // Slight hover for icon buttons
+    }
+  }
+
+  &.btn-tab {
+    background-color: transparent;
+    color: $text-light;
+    padding: 10px 15px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    font-weight: 500;
+    &.active {
+      color: $primary-color;
+      border-bottom-color: $primary-color;
+    }
+    &:hover:not(.active):not(:disabled) {
+      color: $text-color;
+      // background-color: #f0f0f0; // Subtle hover if desired
+    }
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+}

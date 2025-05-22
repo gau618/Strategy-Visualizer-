@@ -1,0 +1,54 @@
+// src/components/Checkbox/Checkbox.scss
+@use '../../index.scss' as *; // Changed from @import
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: $text-color;
+  user-select: none; // Prevent text selection on click
+
+  &.disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  input[type="checkbox"] {
+    margin-right: 8px;
+    width: 16px; // Standard size
+    height: 16px;
+    cursor: pointer;
+    accent-color: $primary-color; // Modern way to color checkbox tick/bg
+
+    // Fallback for older browsers or more custom styling
+    // appearance: none;
+    // -webkit-appearance: none;
+    // background-color: $background-white;
+    // border: 1px solid $border-color;
+    // border-radius: 0.15rem;
+    // position: relative;
+
+    // &:checked {
+    //   background-color: $primary-color;
+    //   border-color: $primary-color;
+    //   &::before {
+    //     content: '✔'; // Or SVG checkmark
+    //     position: absolute;
+    //     color: white;
+    //     font-size: 12px;
+    //     top: 50%;
+    //     left: 50%;
+    //     transform: translate(-50%, -50%);
+    //   }
+    // }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+
+  .checkbox-text {
+    line-height: 1; // Align text properly
+  }
+}

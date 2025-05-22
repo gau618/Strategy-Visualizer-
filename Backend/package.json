@@ -1,0 +1,19 @@
+{
+  "name": "smartapi-live-feed-server",
+  "version": "1.0.0",
+  "description": "Live feed server using Angel One SmartAPI WebSocket 2.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mathjs": "^14.4.0",
+    "smartapi-javascript": "^1.0.27",
+    "socket.io": "^4.8.1"
+  }
+}

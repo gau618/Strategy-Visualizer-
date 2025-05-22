@@ -1,0 +1,95 @@
+// src/features/StrategyVisualizer/sections/NewStrategySection.scss
+@use '../../../index.scss' as *; // Changed from @import
+
+.sv-new-strategy-section {
+  border: 1px solid $border-color;         // Variable from index.scss
+  border-radius: 6px;
+  padding: 15px;
+  background-color: $background-light;   // Variable from index.scss (As per image background for this section)
+
+  .new-strategy-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+
+    h2 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 500;
+      color: $text-color;               // Variable from index.scss
+    }
+
+    .trade-actions {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      font-size: 13px;
+
+    //   .select-all-trades-checkbox {
+    //     // If specific styling needed
+    //   }
+      
+      .clear-trades-btn {
+        color: $sell-color;              // Variable from index.scss (Make "Clear New Trades" red)
+        font-weight: 500;
+      }
+    }
+  }
+
+  .strategy-legs-editor {
+    margin-bottom: 15px;
+    background-color: $background-white; // Variable from index.scss (White background for the editor table)
+    border: 1px solid $border-color;         // Variable from index.scss
+    border-radius: 4px;
+    overflow-x: auto; // Allow horizontal scroll for the table on small screens
+
+
+    .leg-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      font-size: 12px; // Header font slightly smaller or same as row
+      font-weight: 500;
+      color: $text-light;              // Variable from index.scss
+      background-color: #f8f9fa; // Light grey for header background (If this was a var, it'd be available)
+      border-bottom: 1px solid $border-color; // Variable from index.scss
+      
+      .leg-header-checkbox {
+        justify-self: center;
+      }
+    }
+    .no-legs-placeholder {
+        padding: 20px;
+        text-align: center;
+        color: $text-light;              // Variable from index.scss
+        font-style: italic;
+        font-size: 13px;
+    }
+    // StrategyLegRow.scss handles individual row styling
+  }
+
+  .strategy-leg-summary {
+    display: flex;
+    flex-wrap: wrap; // Allow items to wrap
+    gap: 15px 25px; // Row and column gap
+    font-size: 13px;
+    color: $text-color;               // Variable from index.scss (Darker text for summary items)
+    margin-bottom: 15px;
+    padding: 10px;
+    // background-color: lighten($background-light, 2%); // Slightly different shade if needed (lighten is a Sass function)
+    // border-radius: 4px;
+
+    span {
+      font-weight: 500; // Make summary values bold
+    }
+  }
+
+  .strategy-actions-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap; // Allow buttons to wrap
+  }
+}

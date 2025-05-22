@@ -1,0 +1,10 @@
+// src/features/StrategyVisualizer/components/StrategyTabs.scss
+@use '../../../index.scss' as *; // Changed from @import
+
+.sv-strategy-tabs {
+  display: flex;
+  border-bottom: 1px solid $border-color; // Variable now available via 'as *'
+  margin-bottom: 15px; // Space below the tabs before content
+
+  // Button.scss handles .btn-tab styling
+}

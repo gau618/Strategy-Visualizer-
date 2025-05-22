@@ -1,0 +1,71 @@
+// src/features/StrategyVisualizer/sections/ReadyMadeStrategiesSection.scss
+@use '../../../index.scss' as *; // Changed from @import
+
+.sv-ready-made-section {
+  // StrategyTabs are styled by its own component SCSS
+
+  .strategy-selection-content {
+    padding-top: 10px; // Space after tabs if any
+
+    .selection-prompt {
+      font-size: 13px;
+      color: $text-light;
+      margin-bottom: 10px;
+    }
+
+    .strategy-filters-bar {
+      display: flex;
+      flex-wrap: wrap; // Allow filters to wrap on smaller screens
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 15px;
+
+      .expiry-select {
+        // Specific styling for this select if needed
+        min-width: 120px; // Example width
+      }
+    }
+
+    .strategy-grid {
+      display: grid;
+      // Column count and width as per image (approx 8-9 cards in a row for 1200px width)
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 15px;
+
+      .strategy-preview-card {
+        border: 1px solid $border-color;
+        border-radius: 4px;
+        padding: 10px;
+        text-align: center;
+        cursor: pointer;
+        transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        background-color: $background-white;
+
+        &:hover {
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+          border-color: lighten($primary-color, 30%);
+        }
+
+        .strategy-chart-placeholder {
+          height: 50px;
+          background-color: $background-light; // Light background for placeholder
+          border-radius: 3px;
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px; // For emoji icons
+          color: $text-light;
+          // For actual mini-charts, this would be a canvas or SVG container
+        }
+
+        p {
+          font-size: 12px;
+          margin: 0;
+          font-weight: 500;
+          color: $text-color;
+        }
+      }
+    }
+  }
+}

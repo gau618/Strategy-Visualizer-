@@ -1,0 +1,32 @@
+// src/features/StrategyVisualizer/StrategyVisualizer.scss
+
+@use '../../index.scss' as *; // Changed from @import
+
+.strategy-visualizer-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px; // Space between major sections
+  max-width: 1200px; // Or your preferred max width
+  margin: auto;
+  background-color: $background-white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); // Subtle shadow for the container
+}
+
+// Helper class for info icons seen throughout the UI
+.info-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  border: 1px solid #adb5bd; // Using a gray from typical bootstrap vars
+  color: #adb5bd;
+  border-radius: 50%;
+  font-size: 10px;
+  font-style: normal; // Ensure it's not italic if 'i' tag is used
+  cursor: help;
+  margin-left: 4px;
+  vertical-align: middle; // Align with text
+}

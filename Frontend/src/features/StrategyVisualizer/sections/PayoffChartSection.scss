@@ -1,0 +1,134 @@
+// src/features/StrategyVisualizer/sections/PayoffChartSection.scss
+@use '../../../index.scss' as *;
+
+.sv-payoff-chart-section {
+  font-family: $font-family;
+  margin-top: 15px; // Space from NewStrategySection
+
+  .chart-section-tabs {
+    // Styles for StrategyTabs component if needed
+  }
+
+  .tab-content-area {
+    padding-top: 15px;
+    min-height: 300px; // Ensure content area has some height
+  }
+
+  .payoff-graph-content {
+    // ... (your existing payoff graph specific styles for subtabs, OI bar etc.) ...
+    .chart-display-area {
+      position: relative;
+      background-color: $background-white;
+      border: 1px solid $border-color;
+      border-radius: 4px;
+      padding: 10px;
+      min-height: 350px; // Good height for chart
+      canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      .chart-loading-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: $text-light;
+        font-style: italic;
+      }
+    }
+  }
+
+  .greeks-tab-content {
+    padding: 10px 0;
+    .greeks-controls-header {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+      padding: 0 5px; // Small padding
+      .greeks-multiplier-checkbox {
+        label { font-size: 13px; }
+      }
+    }
+  }
+  
+  .tab-content-placeholder { /* ... as before ... */ }
+
+  .global-chart-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    padding: 15px;
+    border-top: 1px solid $border-color;
+    background-color: lighten($background-light, 2%);
+    border-radius: 0 0 4px 4px; // Rounded bottom corners if section is distinct
+
+    .target-controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 80%;
+      gap: 20px; // Gap between Spot group and Date group (if on same line)
+                  // Or use flex-direction: column for separate lines
+      margin-bottom: 15px;
+      
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      &.spot-controls, &.date-controls { // For individual row styling if needed
+        flex-wrap: wrap; // Allow wrapping on smaller screens
+      }
+
+      .input-slider-group {
+        display: flex;
+        flex-direction: column; // Stack label, input+buttons, slider
+        flex-grow: 1; // Allow group to take space
+        gap: 8px;
+
+        label {
+          font-size: 13px;
+          font-weight: 500;
+          color: $text-color;
+          margin-bottom: 2px;
+        }
+
+        .input-with-buttons {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          .target-value-input {
+            flex-grow: 1;
+            max-width: 120px; // Limit width of direct input
+            text-align: center;
+          }
+          .date-display-input {
+            cursor: pointer;
+          }
+          .hidden-date-input {
+            opacity: 0; width: 0; height: 0; position: absolute; z-index: -1;
+          }
+        }
+        
+        .global-target-slider {
+          width: 100%; // Slider takes full width of its group
+          accent-color: $primary-color;
+          // ... (slider track/thumb styles from previous response) ...
+            &::-webkit-slider-runnable-track { width: 100%; height: 5px; cursor: pointer; background: lighten($border-color, 5%); border-radius: 3px; }
+            &::-moz-range-track { width: 100%; height: 5px; cursor: pointer; background: lighten($border-color, 5%); border-radius: 3px; }
+            &::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4.5px; background: $primary-color; height: 14px; width: 14px; border-radius: 50%; cursor: pointer; border: 2px solid $background-white; box-shadow: 0 0 3px rgba(0,0,0,0.2); }
+            &::-moz-range-thumb { background: $primary-color; height: 14px; width: 14px; border-radius: 50%; cursor: pointer; border: 2px solid $background-white; box-shadow: 0 0 3px rgba(0,0,0,0.2); }
+        }
+      }
+    }
+    .date-slider-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: $text-light;
+        padding: 0 5px; // Align with slider ends
+        margin-top: -5px; // Pull up slightly under slider
+    }
+  }
+}

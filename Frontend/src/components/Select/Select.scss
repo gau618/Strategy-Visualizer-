@@ -1,0 +1,32 @@
+// src/components/Select/Select.scss
+@use '../../index.scss' as *; // Changed from @import
+
+.select-input {
+  padding: 6px 28px 6px 10px; // Adjusted padding for arrow space
+  border: 1px solid $border-color;
+  border-radius: 0.25rem;
+  background-color: white;
+  font-size: 14px;
+  min-width: 80px;
+  line-height: 1.5; // Ensure consistent height with inputs
+  appearance: none; // Removes default OS styling/arrow
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 12px 12px;
+  cursor: pointer;
+
+  &:disabled {
+    background-color: $background-light;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  &:focus {
+    border-color: lighten($primary-color, 25%);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba($primary-color, 0.25);
+  }
+}

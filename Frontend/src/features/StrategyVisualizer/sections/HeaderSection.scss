@@ -1,0 +1,31 @@
+// src/features/StrategyVisualizer/sections/HeaderSection.scss
+@use '../../../index.scss' as *; // Changed from @import. For global variables
+
+.sv-header-section {
+  text-align: center;
+  padding-bottom: 15px;
+  border-bottom: 1px solid $border-color; // Variable now available via 'as *'
+  position: relative; // For absolute positioning of the demo button
+
+  h1 {
+    font-size: 24px;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: $text-color; // Variable now available via 'as *'
+  }
+
+  p {
+    font-size: 14px;
+    color: $text-light; // Variable now available via 'as *'
+    margin-bottom: 10px;
+    max-width: 600px; // Keep description from getting too wide
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .demo-videos-btn {
+    position: absolute;
+    top: 0; // Align with top of section
+    right: 0; // Align to right of section
+  }
+}

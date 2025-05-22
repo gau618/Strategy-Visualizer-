@@ -1,0 +1,74 @@
+// src/features/StrategyVisualizer/components/PnLTable.scss
+@use '../../../index.scss' as *;
+
+.pnl-table-container {
+  width: 100%;
+  font-family: $font-family;
+  font-size: 13px;
+  color: $text-color;
+
+  &.no-data-message { // Updated class name
+    padding: 20px;
+    text-align: center;
+    color: $text-light;
+    font-style: italic;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 5px;
+
+    th, td {
+      padding: 9px 12px;
+      text-align: right;
+      border-bottom: 1px solid $border-color;
+      vertical-align: middle;
+    }
+
+    th {
+      background-color: $background-light;
+      font-weight: 600;
+      font-size: 12px;
+      color: $text-light;
+      text-transform: none;
+      border-top: 1px solid $border-color;
+    }
+
+    td:first-child, th:first-child { // Instrument
+      text-align: left;
+      min-width: 220px;
+      font-weight: 500;
+    }
+
+    .pnl-total-row {
+      background-color: lighten($background-light, 2%);
+      font-weight: bold;
+
+      td {
+        color: darken($text-color, 15%);
+        border-top: 2px solid darken($border-color, 10%);
+      }
+
+      .projected-label {
+        font-weight: normal;
+        font-size: 11px;
+        color: $primary-color;
+        background-color: lighten($primary-color, 40%);
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-left: 5px;
+        vertical-align: middle;
+      }
+      .info-icon {
+        font-size: 10px;
+        color: $text-light;
+        margin-left: 4px;
+        cursor: help;
+      }
+    }
+    // P&L Coloring
+    .pnl-value-positive { color: $primary-color; } // Green for positive P&L
+    .pnl-value-negative { color: $sell-color; }   // Red for negative P&L
+  }
+}

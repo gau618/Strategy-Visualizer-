@@ -1,0 +1,26 @@
+// src/features/StrategyVisualizer/sections/TopControlsSection.scss
+@use '../../../index.scss' as *; // Changed from @import
+
+.sv-top-controls-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 10px 0; // Padding top/bottom, no side padding if container handles it
+
+//   .instrument-type-toggle {
+//     // Specific styles if needed, otherwise ToggleButtonGroup.scss handles it
+//   }
+
+  .search-input {
+    flex-grow: 1;
+    max-width: 300px; // As per image, it's not overly wide
+    // Assuming Input.scss handles the .search-input variant style
+    // for background color
+  }
+
+  .top-actions {
+    display: flex;
+    gap: 10px;
+  }
+}

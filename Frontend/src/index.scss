@@ -1,0 +1,39 @@
+// src/index.scss
+
+// Variables (optional, for consistency)
+$primary-color: #28a745;
+$secondary-color: #ffc107;
+$sell-color: #dc3545;
+$text-color: #343a40;
+$text-light: #6c757d;
+$border-color: #dee2e6;
+$background-light: #f8f9fa;
+$background-white: #ffffff;
+$font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+body {
+  font-family: $font-family;
+  color: $text-color;
+  background-color: #e9ecef; // Page background
+  margin: 0;
+  padding: 0; // Reset default padding if App handles it
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+// You can add resets or other global styles here
+a {
+  text-decoration: none;
+  color: $primary-color;
+  &:hover {
+    text-decoration: underline;
+  }
+}

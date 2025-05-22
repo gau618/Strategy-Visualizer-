@@ -1,0 +1,39 @@
+// src/features/StrategyVisualizer/sections/SummaryMetricsSection.scss
+@use '../../../index.scss' as *; // Changed from @import
+
+.sv-summary-metrics-section {
+  display: grid;
+  // As per image, it looks like 4 distinct groups/columns
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); // Responsive columns
+  gap: 20px; // Space between metric groups
+  padding: 15px;
+  background-color: $background-light; // Light background for this section
+  border-radius: 6px;
+  border: 1px solid $border-color;
+
+
+  .metric-group {
+    // Each group is a flex column if MetricItems need to stack nicely
+    display: flex;
+    flex-direction: column;
+    gap: 8px; // Space between items within a group
+
+    h4 {
+      font-size: 13px;
+      color: $text-light; // Lighter color for group titles
+      margin-bottom: 5px; // Small space below title before items
+      font-weight: 400; // Normal weight for group titles
+      display: flex; // To align button with text
+      align-items: center;
+      justify-content: space-between; // For Risk/Reward and button
+    }
+    
+    .risk-reward-btn {
+        // From Button.scss (.btn-tertiary, .btn-size-small)
+        // Add specific overrides if needed
+        margin-left: auto; // Push button to the right if h4 doesn't use space-between
+    }
+
+    // MetricItem.scss will style individual metric items
+  }
+}

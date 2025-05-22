@@ -1,0 +1,52 @@
+// src/features/StrategyVisualizer/components/StrategyLegRow.scss
+@use '../../../index.scss' as *; // Changed from @import
+
+.strategy-leg-row {
+  display: flex;
+  // This will be inherited from the parent .strategy-legs-editor
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px; // Matches parent's row padding
+  font-size: 13px;
+  border-bottom: 1px solid #f0f0f0; // Separator line. If #f0f0f0 comes from index.scss, it's now available.
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  // .leg-checkbox {
+  //   // Styles for checkbox alignment if needed
+  //   // justify-self: center; // Note: justify-self is a grid property and won't apply in a flex container.
+  //                           // If checkbox needs centering, use flex properties on the item or its direct parent.
+  // }
+
+  .leg-buy-sell {
+    // ToggleButtonGroup.scss has a .leg-buy-sell variant
+    min-width: 70px; // Ensure it fits "Buy"/"Sell"
+  }
+
+  .leg-select {
+    width: 100%; // Make selects fill their grid cell
+    font-size: 13px; // Match row font size
+    padding-top: 4px; // Adjust padding for smaller font
+    padding-bottom: 4px;
+  }
+  
+  .leg-price-input {
+    width: 100%;
+    input {
+      text-align: right;
+      font-size: 13px;
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+  }
+
+  .leg-actions {
+    display: flex;
+    justify-content: flex-end; // Align action buttons to the right
+    gap: 5px; // Space between action icons
+    // Button.scss handles .btn-icon and .btn-size-small
+  }
+}
