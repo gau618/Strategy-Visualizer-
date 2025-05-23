@@ -1,232 +1,126 @@
 // src/features/StrategyVisualizer/sections/DetailedDataSection.jsx
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import Button from '../../../components/Button/Button';
 import Checkbox from '../../../components/Checkbox/Checkbox';
-import { useLiveOptionData } from '../../../contexts/LiveOptionDataContext';
-// VVVV IMPORT FRONTEND UTILS VVVV
 import { black76Greeks, timeToExpiry } from '../../utils/optionPricingUtils';
-import { DEFAULT_VOLATILITY } from '../../../config'; // Assuming default IV if live not present
-
-import './DetailedDataSection.scss';
+import { DEFAULT_VOLATILITY, GLOBAL_IV_OFFSET_STEP, IV_ADJUSTMENT_STEP } from '../../../config';
+import './DetailedDataSection.scss'; // Ensure this SCSS file exists and is linked
 
 const DetailedDataSection = ({
-  strategyLegs,
-  currentUnderlying,
-  getOptionByToken, // For live IVs and fallback live Greeks
-  riskFreeRate,     // For projected Greeks calculation
-  
-  projectedNiftyTarget, // Projected underlying price from sliders
-  projectedTargetDate,  // Projected date from sliders
-
-  // Assuming DetailedDataSection will have its own instances of these checkboxes
-  // If they are to be synced with PayoffChartSection, these props should come from StrategyVisualizer
-  multiplyByLotSize: initialMultiplyLotSize = false, // Default if not passed
-  onMultiplyByLotSizeChange,
-  multiplyByNumLots: initialMultiplyNumLots = false, // Default if not passed
-  onMultiplyByNumLotsChange
+  strategyLegs, currentUnderlying, getOptionByToken, riskFreeRate, liveOptionChainMap,
+  projectedNiftyTarget, projectedTargetDate,
+  individualIvAdjustments, onIndividualIvAdjustmentChange, 
+  globalIvOffset, onGlobalIvOffsetChange, // globalIvOffset and its handler now from props
+  onResetAllIvAdjustments, 
+  getScenarioIV,
+  multiplyByLotSize, onMultiplyByLotSizeChange,
+  multiplyByNumLots, onMultiplyByNumLotsChange,
 }) => {
-  // If multiplier state is managed by StrategyVisualizer and passed as props:
-  const isMultiplyLotSizeControlled = onMultiplyByLotSizeChange !== undefined;
-  const isMultiplyNumLotsControlled = onMultiplyByNumLotsChange !== undefined;
 
-  const [
-    currentMultiplyLotSize, 
-    setCurrentMultiplyLotSizeInternal
-  ] = useState(initialMultiplyLotSize);
-  const [
-    currentMultiplyNumLots, 
-    setCurrentMultiplyNumLotsInternal
-  ] = useState(initialMultiplyNumLots);
+  const handleLocalGlobalIvOffsetChange = useCallback((increment) => {
+    onGlobalIvOffsetChange(prevOffset => prevOffset + increment); // Call parent's handler
+  }, [onGlobalIvOffsetChange]);
 
-  // Use prop if controlled, else internal state
-  const multiplyGreeksByLotSize = isMultiplyLotSizeControlled ? initialMultiplyLotSize : currentMultiplyLotSize;
-  const multiplyGreeksByNumLots = isMultiplyNumLotsControlled ? initialMultiplyNumLots : currentMultiplyNumLots;
+  const handleLocalIndividualIvAdjust = useCallback((token, currentAdjustment, increment) => {
+    const newValue = parseFloat((currentAdjustment + increment).toFixed(1));
+    onIndividualIvAdjustmentChange(token, newValue);
+  }, [onIndividualIvAdjustmentChange]);
 
-  const handleSetMultiplyLotSize = (checked) => {
-    if (isMultiplyLotSizeControlled) {
-      onMultiplyByLotSizeChange(checked);
-    } else {
-      setCurrentMultiplyLotSizeInternal(checked);
-    }
-  };
-  const handleSetMultiplyNumLots = (checked) => {
-    if (isMultiplyNumLotsControlled) {
-      onMultiplyByNumLotsChange(checked);
-    } else {
-      setCurrentMultiplyNumLotsInternal(checked);
-    }
-  };
-  
-  // Strikewise IVs (remains based on live data + offset)
-  const [ivOffset, setIvOffset] = useState(0);
-  const strikewiseIVsData = useMemo(() => { /* ... existing logic ... */ 
-    return strategyLegs
-      .filter(leg => leg.selected && leg.token)
-      .map(leg => {
-        const liveOption = getOptionByToken(leg.token);
-        if (!liveOption || liveOption.iv === undefined) {
-          return { id: leg.id, strike: leg.strike, expiry: leg.expiry, ivDisplay: 'N/A', originalIV: 0, chg: 'N/A' };
-        }
-        const originalIV = parseFloat(liveOption.iv);
-        const displayedIV = (originalIV + ivOffset).toFixed(2);
-        return {
-          id: leg.id, strike: liveOption.strike,
-          expiry: liveOption.expiry.substring(0,9).replace(/(\d{2})([A-Z]{3})(\d{2})/, '$1-$2-$3'),
-          ivDisplay: displayedIV, originalIV: originalIV,
-          chg: `(${ (parseFloat(displayedIV) - originalIV).toFixed(1) })`,
-        };
-      });
-  }, [strategyLegs, getOptionByToken, ivOffset]);
+  const strikewiseIVsDisplayData = useMemo(() => {
+    return strategyLegs.filter(leg => leg.selected && leg.token).map(leg => {
+      const liveOption = getOptionByToken(leg.token);
+      if (!liveOption || liveOption.iv === undefined) return { id: leg.id, token: leg.token, strike: leg.strike, expiry: leg.expiry, effectiveIVDisplay: 'N/A', originalIV:0, chg:'N/A', currentIndividualAdjustment:0 };
+      const originalIV = parseFloat(liveOption.iv);
+      const individualAdjustment = individualIvAdjustments[leg.token] || 0;
+      const effectiveIV = originalIV + individualAdjustment + globalIvOffset; // globalIvOffset from props
+      return { id: leg.id, token: leg.token, strike: liveOption.strike, expiry: liveOption.expiry.substring(0,9).replace(/(\d{2})([A-Z]{3})(\d{2})/, '$1-$2-$3'), effectiveIVDisplay: effectiveIV.toFixed(2), originalIV, currentIndividualAdjustment: individualAdjustment, chg: (effectiveIV - originalIV).toFixed(1) };
+    });
+  }, [strategyLegs, getOptionByToken, globalIvOffset, individualIvAdjustments]);
 
-
-  const greeksSource = useMemo(() => {
+  const greeksSourceLabel = useMemo(() => {
     const numericProjectedTarget = parseFloat(projectedNiftyTarget);
-    if (projectedTargetDate && !isNaN(numericProjectedTarget)) {
-      return "Projected";
-    }
-    return "Live";
+    return (projectedTargetDate && !isNaN(numericProjectedTarget)) ? "Projected Scenario" : "Live Scenario (IV Adj.)";
   }, [projectedNiftyTarget, projectedTargetDate]);
 
-  // Greeks Summary - Now dynamic based on projected targets or live data
   const greeksSummary = useMemo(() => {
     let aggDelta = 0, aggGamma = 0, aggTheta = 0, aggVega = 0;
     const numericProjectedTarget = parseFloat(projectedNiftyTarget);
-    const useProjected = projectedTargetDate && !isNaN(numericProjectedTarget);
-    const projectionDate = useProjected ? new Date(projectedTargetDate) : null;
+    const useProjectedScenario = projectedTargetDate && !isNaN(numericProjectedTarget);
+    const projectionDate = useProjectedScenario ? new Date(projectedTargetDate) : new Date();
 
-    strategyLegs.forEach(leg => {
-      if (leg.selected && leg.token) {
-        const liveOption = getOptionByToken(leg.token);
-        if (!liveOption || !liveOption.strike || !liveOption.expiry || liveOption.optionType === undefined) return;
-
-        let legGreeks = { delta: 0, gamma: 0, theta: 0, vega: 0 }; // Default
-
-        if (useProjected && projectionDate) {
-          // Calculate PROJECTED Greeks
-          const T_to_expiry = timeToExpiry(liveOption.expiry, projectionDate);
-          const currentIV = liveOption.iv !== undefined ? (parseFloat(liveOption.iv) / 100) + (ivOffset / 100) : DEFAULT_VOLATILITY;
-
-          if (T_to_expiry > 0 && currentIV > 0) {
-            const F_projected = numericProjectedTarget * Math.exp(riskFreeRate * T_to_expiry);
-            legGreeks = black76Greeks(
-              F_projected, Number(liveOption.strike), T_to_expiry,
-              riskFreeRate, currentIV, liveOption.optionType
-            );
-          } else { // Expired or zero vol scenario for projection
-             legGreeks = black76Greeks(numericProjectedTarget, Number(liveOption.strike), T_to_expiry, riskFreeRate, currentIV, liveOption.optionType);
-          }
-        } else {
-          // Use LIVE Greeks from backend
-          if (liveOption.greeks) {
-            legGreeks = {
-                delta: liveOption.greeks.delta || 0,
-                gamma: liveOption.greeks.gamma || 0,
-                theta: liveOption.greeks.theta || 0,
-                vega: liveOption.greeks.vega || 0, // Assuming liveOption.greeks.vega is raw
-            };
-          }
-        }
-        
-        const direction = leg.buySell === 'Buy' ? 1 : -1;
-        let scale = 1;
-        if (multiplyGreeksByLotSize) scale *= (leg.lotSize || 1);
-        if (multiplyGreeksByNumLots) scale *= (leg.lots || 1);
-
-        aggDelta += legGreeks.delta * direction * scale;
-        aggGamma += legGreeks.gamma * scale; // Typically sums positively for strategy
-        aggTheta += legGreeks.theta * direction * scale;
-        aggVega += legGreeks.vega * scale;   // Typically sums positively for strategy (raw vega)
+    strategyLegs.filter(leg => leg.selected && leg.token).forEach(leg => {
+      const liveOption = getOptionByToken(leg.token);
+      if (!liveOption || !liveOption.strike || !liveOption.expiry || liveOption.optionType === undefined) return;
+      const scenarioIVForLeg = getScenarioIV(leg.token); // Uses globalIvOffset from StrategyVisualizer
+      const T_to_calc = timeToExpiry(liveOption.expiry, projectionDate);
+      let F_for_calc;
+      if (useProjectedScenario) {
+        F_for_calc = numericProjectedTarget * Math.exp(riskFreeRate * T_to_calc);
+      } else {
+        const spot = liveOption.marketData?.spot ? parseFloat(liveOption.marketData.spot) : numericProjectedTarget;
+        F_for_calc = parseFloat(liveOption.marketData?.futures ?? (spot * Math.exp(riskFreeRate * T_to_calc)));
+        if(isNaN(F_for_calc)) F_for_calc = spot;
       }
+      if(isNaN(F_for_calc) || F_for_calc <=0) return;
+      let legGreeks = black76Greeks(F_for_calc, Number(liveOption.strike), T_to_calc, riskFreeRate, scenarioIVForLeg, liveOption.optionType);
+      const direction = leg.buySell === 'Buy' ? 1 : -1;
+      let scale = 1; if (multiplyByLotSize) scale *= (leg.lotSize || 1); if (multiplyByNumLots) scale *= (leg.lots || 1);
+      if(!isNaN(legGreeks.delta)) aggDelta += legGreeks.delta * direction * scale;
+      if(!isNaN(legGreeks.gamma)) aggGamma += legGreeks.gamma * scale; 
+      if(!isNaN(legGreeks.theta)) aggTheta += legGreeks.theta * direction * scale;
+      if(!isNaN(legGreeks.vega)) aggVega += legGreeks.vega * scale; // Raw vega
     });
-    // For display, Vega needs to be scaled (per 1%)
-    return { delta: aggDelta, gamma: aggGamma, theta: aggTheta, vega: aggVega / 100 };
-  }, [
-    strategyLegs, getOptionByToken, 
-    projectedNiftyTarget, projectedTargetDate, riskFreeRate, ivOffset, // Add ivOffset if it affects projected IV
-    multiplyGreeksByLotSize, multiplyGreeksByNumLots
-  ]);
+    return { delta: aggDelta, gamma: aggGamma, theta: aggTheta, vega: aggVega / 100 }; // Scale final vega
+  }, [strategyLegs, getOptionByToken, projectedNiftyTarget, projectedTargetDate, riskFreeRate, multiplyByLotSize, multiplyByNumLots, getScenarioIV, individualIvAdjustments]); // Added individualIvAdjustments
 
-  // Target Day Futures & SD (remains mostly based on live/default for now)
-  const [targetDayFuturesInfo, setTargetDayFuturesInfo] = useState({ /* ... */ });
-  useEffect(() => { /* ... existing logic from your paste.txt for targetDayFuturesInfo ... */ }, [strategyLegs, getOptionByToken]);
-
-  const handleResetIVs = () => setIvOffset(0);
+  const targetDayFuturesInfo = useMemo(() => { /* ... Placeholder or your existing logic from paste.txt, ensure getScenarioIV is used if it depends on scenario IV ... */
+     const firstLeg = strategyLegs.find(l => l.selected && l.token);
+     const liveOptForSpot = firstLeg ? getOptionByToken(firstLeg.token) : null;
+     const spotPrice = liveOptForSpot?.marketData?.spot ? parseFloat(liveOptForSpot.marketData.spot) : (currentUnderlying === "BANKNIFTY" ? 48000 : 23000);
+     const sdVolatility = firstLeg ? getScenarioIV(firstLeg.token) : DEFAULT_VOLATILITY; // Use scenario IV
+     const TTM = 30/365.25; const oneSdPoints = spotPrice * sdVolatility * Math.sqrt(TTM);
+     const date = new Date(); date.setDate(date.getDate() + 30);
+     return { date: date.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}), price:spotPrice>0?spotPrice.toFixed(2):'N/A', sd:spotPrice>0&&oneSdPoints>0&&!isNaN(oneSdPoints)?[{level:'1 SD',points:`${oneSdPoints.toFixed(1)} (${(oneSdPoints/spotPrice*100).toFixed(1)}%)`,priceLow:(spotPrice-oneSdPoints).toFixed(1),priceHigh:(spotPrice+oneSdPoints).toFixed(1)},{level:'2 SD',points:`${(oneSdPoints*2).toFixed(1)} (${(oneSdPoints*2/spotPrice*100).toFixed(1)}%)`,priceLow:(spotPrice-oneSdPoints*2).toFixed(1),priceHigh:(spotPrice+oneSdPoints*2).toFixed(1)}]:[]};
+  }, [strategyLegs, getOptionByToken, currentUnderlying, getScenarioIV, liveOptionChainMap]);
 
   return (
     <section className="sv-detailed-data-section">
-      {/* Strikewise IVs Column (remains based on live data + offset) */}
       <div className="data-column strikewise-ivs-column">
-        <h4>Strikewise IVs <Button variant="link" size="small" onClick={handleResetIVs}>Reset IVs</Button></h4>
+        <h4>Strikewise IVs <Button variant="link" size="small" onClick={onResetAllIvAdjustments}>Reset All IVs</Button></h4>
         <div className="offset-control">
-          <span>offset</span>
-          <Button variant="tertiary" size="small" onClick={() => setIvOffset(prev => parseFloat((prev - 0.5).toFixed(1)))}>-</Button>
-          <span className="offset-value">{ivOffset.toFixed(1)}</span>
-          <Button variant="tertiary" size="small" onClick={() => setIvOffset(prev => parseFloat((prev + 0.5).toFixed(1)))}>+</Button>
+          <span>Global Offset</span>
+          <Button variant="tertiary" size="small" onClick={() => handleLocalGlobalIvOffsetChange(-GLOBAL_IV_OFFSET_STEP)}>-</Button>
+          <span className="offset-value">{globalIvOffset.toFixed(1)}%</span>
+          <Button variant="tertiary" size="small" onClick={() => handleLocalGlobalIvOffsetChange(GLOBAL_IV_OFFSET_STEP)}>+</Button>
         </div>
-        <table>
-          <thead><tr><th>Strike</th><th>Expiry</th><th>IV</th><th>Chg</th></tr></thead>
-          <tbody>
-            {strikewiseIVsData.length > 0 ? strikewiseIVsData.map((item) => (
-              <tr key={item.id || `${item.strike}-${item.expiry}`}>
-                <td>{item.strike} <span className="info-icon">ⓘ</span></td>
-                <td>{item.expiry}</td>
-                <td className="iv-control-cell">
-                  <Button variant="tertiary" size="small" className="iv-btn" disabled>-</Button>
-                  <span className="iv-display-value">{item.ivDisplay}</span>
-                  <Button variant="tertiary" size="small" className="iv-btn" disabled>+</Button>
-                </td>
-                <td>{item.chg}</td>
-              </tr>
-            )) : (<tr><td colSpan={4} className="no-data-row">No legs selected.</td></tr>)}
-          </tbody>
-        </table>
+        <table><thead><tr><th>Strike</th><th>Expiry</th><th>Effective IV</th><th>Chg (Live)</th><th>Adjust Indiv.</th></tr></thead><tbody>
+          {strikewiseIVsDisplayData.map((item) => (<tr key={item.id}><td>{item.strike}</td><td>{item.expiry}</td><td>{item.effectiveIVDisplay}%</td><td>{item.chg}%</td>
+            <td className="iv-adjust-cell">
+              <Button variant="icon" size="small" className="iv-adjust-btn" onClick={() => handleLocalIndividualIvAdjust(item.token, item.currentIndividualAdjustment, -IV_ADJUSTMENT_STEP)}>–</Button>
+              <span className="individual-offset-value">{(item.currentIndividualAdjustment || 0).toFixed(1)}%</span>
+              <Button variant="icon" size="small" className="iv-adjust-btn" onClick={() => handleLocalIndividualIvAdjust(item.token, item.currentIndividualAdjustment, IV_ADJUSTMENT_STEP)}>+</Button>
+            </td></tr>))}
+          {strikewiseIVsDisplayData.length === 0 && <tr><td colSpan="5" className="no-data-row">No legs selected.</td></tr>}
+        </tbody></table>
       </div>
-
-      {/* Greeks Summary Column */}
       <div className="data-column greeks-summary-column">
-        <h4>Greeks <span className="greeks-source-label">({greeksSource})</span></h4>
-        <Checkbox
-            label="Multiply by Lot Size"
-            checked={multiplyGreeksByLotSize}
-            onChange={handleSetMultiplyLotSize}
-            className="greeks-checkbox"
-        />
-        <Checkbox
-            label="Multiply by Number of Lots"
-            checked={multiplyGreeksByNumLots}
-            onChange={handleSetMultiplyNumLots}
-            className="greeks-checkbox"
-        />
-        <table>
-          <tbody>
-            <tr><td>Delta</td><td>{greeksSummary.delta?.toFixed(2) || '0.00'}</td></tr>
-            <tr><td>Gamma</td><td>{greeksSummary.gamma?.toFixed(4) || '0.0000'}</td></tr>
-            <tr><td>Theta</td><td>{greeksSummary.theta?.toFixed(2) || '0.00'}</td></tr>
-            <tr><td>Vega</td><td>{greeksSummary.vega?.toFixed(2) || '0.00'}</td></tr> {/* Already scaled to per 1% */}
-          </tbody>
-        </table>
+        <h4>Greeks <span className="greeks-source-label">({greeksSourceLabel})</span></h4>
+        <Checkbox label="Lot Size" checked={multiplyByLotSize} onChange={onMultiplyByLotSizeChange} className="greeks-checkbox"/>
+        <Checkbox label="Num Lots" checked={multiplyByNumLots} onChange={onMultiplyByNumLotsChange} className="greeks-checkbox"/>
+        <table><tbody>
+            <tr><td>Delta</td><td>{greeksSummary.delta?.toFixed(2) || '-'}</td></tr>
+            <tr><td>Gamma</td><td>{greeksSummary.gamma?.toFixed(4) || '-'}</td></tr>
+            <tr><td>Theta</td><td>{greeksSummary.theta?.toFixed(2) || '-'}</td></tr>
+            <tr><td>Vega</td><td>{greeksSummary.vega?.toFixed(2) || '-'}</td></tr>
+        </tbody></table>
       </div>
-
-      {/* Target Day Futures Column (remains as is) */}
       <div className="data-column target-day-futures-column">
-         {/* ... existing JSX from your paste.txt ... */}
-         <h4>Target Day Futures Prices</h4>
-        {targetDayFuturesInfo.price !== 'N/A' && (
-            <p className="futures-price-display">
-                {targetDayFuturesInfo.date} <span className="price-value">{targetDayFuturesInfo.price}</span>
-            </p>
-        )}
-        <h4>Standard Deviation</h4>
-        <table>
-          <thead><tr><th>SD</th><th>Points</th><th>Price</th></tr></thead>
-          <tbody>
-            {targetDayFuturesInfo.sd?.length > 0 ? targetDayFuturesInfo.sd.map((item, index) => (
-              <tr key={index}>
-                <td>{item.level}</td><td>{item.points}</td><td>{item.priceLow}<br/>{item.priceHigh}</td>
-              </tr>
-            )) : (<tr><td colSpan={3} className="no-data-row">SD data unavailable.</td></tr>)}
-          </tbody>
-        </table>
+         <h4>Target Day Futures</h4>
+         {(targetDayFuturesInfo.price && targetDayFuturesInfo.price !== "0.00" && targetDayFuturesInfo.price !== 'N/A') && (<p className="futures-price-display">{targetDayFuturesInfo.date} <span className="price-value">{targetDayFuturesInfo.price}</span></p>)}
+         <h4>Standard Deviation</h4>
+         <table><thead><tr><th>SD</th><th>Points</th><th>Price</th></tr></thead><tbody>
+            {targetDayFuturesInfo.sd?.length > 0 ? (targetDayFuturesInfo.sd.map((item, index) => (<tr key={index}><td>{item.level}</td><td>{item.points}</td><td>{item.priceLow}<br/>{item.priceHigh}</td></tr>))) : (<tr><td colSpan="3" className="no-data-row">SD data unavailable.</td></tr>)}
+         </tbody></table>
       </div>
     </section>
   );
