@@ -6,12 +6,35 @@ const app=express();
 
 app.use(cors({
      origin: 'http://localhost:5173',  
-     credentials: true                
+    //  credentials: true                
   }));
 app.use(express.json({limit:"20kb"}))
 app.use(express.urlencoded({extended:true,limit:"20kb"}))
 app.use(express.static('public'))
 app.use(cookieParser())
+// Import Routers
+import strategyRouter from './routes/strategy.routes.js';
+// import userRouter from './routes/user.routes.js'; // If you had user auth routes
+
+// Define Routes
+app.use('/api/v1/strategies', strategyRouter);
+// app.use('/api/v1/users', userRouter);
+
+// Simple health check route
+app.get('/api/v1/health', (req, res) => {
+    res.status(200).json({ status: 'Backend is healthy!', timestamp: new Date().toISOString() });
+});
+
+
+// Basic error handler (can be made more sophisticated)
+app.use((err, req, res, next) => {
+  console.error("Global Error Handler:", err.stack);
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message || 'Internal Server Error',
+    // errors: err.errors // Optionally pass validation errors or other details
+  });
+});
 
 
 export {app};

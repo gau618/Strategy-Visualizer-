@@ -328,7 +328,7 @@ const PayoffChartSection = ({
         let scale = 1;
         if (multiplyByLotSize) scale *= leg.lotSize || 1;
         if (multiplyByNumLots) scale *= leg.lots || 1;
-        console.log(scale,multiplyByLotSize,multiplyByNumLots,leg.lots,leg.lotSize);
+  
         const direction = leg.buySell === "Buy" ? 1 : -1;
 
         if (!isNaN(pnlPerShare)) aggProjectedPnL += pnlPerShare * scale;

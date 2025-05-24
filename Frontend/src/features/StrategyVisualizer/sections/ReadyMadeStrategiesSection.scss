@@ -1,71 +1,348 @@
-// src/features/StrategyVisualizer/sections/ReadyMadeStrategiesSection.scss
-@use '../../../index.scss' as *; // Changed from @import
+// frontend/src/features/StrategyVisualizer/sections/ReadyMadeStrategiesSection.scss
+@use '../../../index.scss' as *; // Assuming your variables are here
+
+// Variables (can be moved to _index.scss or _variables.scss)
+// Fallbacks if not defined in _index.scss
+$primary-color: #007bff !default;
+$text-color: #343a40 !default;
+$text-light: #6c757d !default;
+$border-color: #dee2e6 !default;
+$background-white: #ffffff !default;
+$background-light: #f8f9fa !default;
+$success-color: #28a745 !default;
+$success-bg-light: #e9f5ec !default;
+$success-border-light: #a3d8b3 !default;
+$danger-color: #dc3545 !default;
+$danger-bg-light: #fbebed !default;
+$danger-border-light: #f1b0b7 !default;
+$neutral-color: #6c757d !default;
+$neutral-bg-light: #f0f2f5 !default;
+$neutral-border-light: #d3d9e0 !default;
+$card-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !default;
+$card-hover-border: lighten($primary-color, 20%) !default;
+$chip-bg-color: #e9ecef !default;
+$chip-text-color: #495057 !default;
+$chip-border-color: #ced4da !default;
 
 .sv-ready-made-section {
-  // StrategyTabs are styled by its own component SCSS
+  padding: 15px 20px; // Consistent padding
+  background-color: $background-light; 
+  min-height: 300px; // Give it some default height
+}
 
-  .strategy-selection-content {
-    padding-top: 10px; // Space after tabs if any
+// Styles for "Ready-made" tab content
+.strategy-selection-content {
+  padding-top: 15px;
 
-    .selection-prompt {
-      font-size: 13px;
-      color: $text-light;
-      margin-bottom: 10px;
+  .selection-prompt {
+    font-size: 0.875rem; // 14px
+    color: $text-light;
+    margin-bottom: 15px;
+    text-align: left;
+  }
+
+  .strategy-filters-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+
+    .filter-button { // Assuming your Button component can take these styles
+      // Styles defined by Button component, or add overrides here
     }
 
-    .strategy-filters-bar {
+    .expiry-select { // Class for the Select component wrapper
+      min-width: 150px;
+      // Styles for Select component (if not handled internally by Select component)
+    }
+  }
+
+  .strategy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); // Slightly larger cards
+    gap: 15px;
+
+    .strategy-preview-card {
+      border: 1px solid $border-color;
+      //border-radius: $border-radius-medium; // Consistent border radius
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+      background-color: $background-white;
       display: flex;
-      flex-wrap: wrap; // Allow filters to wrap on smaller screens
-      gap: 10px;
+      flex-direction: column;
       align-items: center;
-      margin-bottom: 15px;
+      justify-content: center; // Center content vertically if needed
 
-      .expiry-select {
-        // Specific styling for this select if needed
-        min-width: 120px; // Example width
+      &:hover {
+        box-shadow: $card-hover-shadow;
+        border-color: $card-hover-border;
+        transform: translateY(-2px);
       }
-    }
 
-    .strategy-grid {
-      display: grid;
-      // Column count and width as per image (approx 8-9 cards in a row for 1200px width)
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 15px;
+      .strategy-chart-placeholder {
+        height: 60px; // Increased height
+        width: 100%; // Take full width of card
+        background-color: lighten($background-light, 2%);
+       // border-radius: $border-radius-small;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        color: darken($text-light, 10%);
+      }
 
-      .strategy-preview-card {
-        border: 1px solid $border-color;
-        border-radius: 4px;
-        padding: 10px;
-        text-align: center;
-        cursor: pointer;
-        transition: box-shadow 0.2s ease, border-color 0.2s ease;
-        background-color: $background-white;
-
-        &:hover {
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-          border-color: lighten($primary-color, 30%);
-        }
-
-        .strategy-chart-placeholder {
-          height: 50px;
-          background-color: $background-light; // Light background for placeholder
-          border-radius: 3px;
-          margin-bottom: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 24px; // For emoji icons
-          color: $text-light;
-          // For actual mini-charts, this would be a canvas or SVG container
-        }
-
-        p {
-          font-size: 12px;
-          margin: 0;
-          font-weight: 500;
-          color: $text-color;
-        }
+      p {
+        font-size: 0.8rem; // 12.8px
+        margin: 0;
+        font-weight: 500;
+        color: $text-color;
+        line-height: 1.3;
       }
     }
   }
+}
+
+// Common styles for tab content placeholders (loading/empty)
+.tab-content-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px 20px;
+  text-align: center;
+  color: $text-light;
+  min-height: 250px;
+
+  &.loading-state {
+    font-style: italic;
+    font-size: 0.9rem;
+  }
+
+  &.empty-state {
+    p {
+      margin-top: 15px;
+      font-size: 1rem;
+      color: $text-color;
+    }
+    .empty-state-icon {
+      width: 70px;
+      height: 70px;
+      opacity: 0.6;
+      margin-bottom: 10px;
+    }
+  }
+}
+
+// Styles for displaying lists of saved items (Positions, My Strategies, Drafts)
+.saved-items-container {
+  padding-top: 10px; // Space if search bar is present
+
+  .saved-items-search-bar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    background-color: $background-white;
+    border: 1px solid $border-color;
+   // border-radius: $border-radius-large; // More rounded search bar
+    padding: 6px 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+
+    .icon-search-input { // Class for the search icon
+      margin-right: 10px;
+      color: $text-light;
+      font-size: 1.1rem; // Slightly larger search icon
+    }
+
+    input[type="text"] {
+      flex-grow: 1;
+      border: none;
+      outline: none;
+      padding: 8px 0; // Vertical padding, no horizontal as icon provides space
+      font-size: 0.9rem;
+      background-color: transparent;
+      color: $text-color;
+      &::placeholder {
+        color: $text-light;
+      }
+    }
+  }
+
+  .saved-items-grid {
+    display: grid;
+    grid-template-columns: 1fr; // Mobile first: 1 column
+    gap: 18px; // Slightly more gap
+
+    @media (min-width: 600px) { // Small tablets
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    @media (min-width: 992px) { // Desktops
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    }
+  }
+}
+
+.saved-item-card {
+  background-color: $background-white;
+  border: 1px solid $border-color;
+ // border-radius: $border-radius-medium;
+  padding: 18px; // More padding
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease;
+
+  &:hover {
+    box-shadow: $card-hover-shadow;
+    border-color: $card-hover-border;
+    transform: translateY(-3px);
+  }
+
+  .card-main-content {
+    flex-grow: 1; // Allows body to take space and push footer down
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+
+    .card-title {
+      font-size: 1.05rem; // Slightly larger title
+      font-weight: 600;
+      color: $text-color;
+      margin: 0;
+      margin-right: 10px;
+      word-break: break-word;
+      line-height: 1.3;
+    }
+
+    .card-pnl {
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 5px 10px;
+     // border-radius: $border-radius-small;
+      white-space: nowrap;
+      text-align: right;
+      min-width: 80px; // Ensure space for P&L
+      border-width: 1px;
+      border-style: solid;
+
+      &.pnl-positive {
+        color: $success-color;
+        background-color: $success-bg-light;
+        border-color: $success-border-light;
+      }
+      &.pnl-negative {
+        color: $danger-color;
+        background-color: $danger-bg-light;
+        border-color: $danger-border-light;
+      }
+      &.pnl-neutral {
+        color: $neutral-color;
+        background-color: $neutral-bg-light;
+        border-color: $neutral-border-light;
+      }
+    }
+  }
+
+  .card-body {
+    margin-bottom: 15px;
+    flex-grow: 1; // Allow body to expand
+
+    .card-detail-row {
+        display: flex;
+        justify-content: space-between; // Spreads out underlying and legs count
+        margin-bottom: 8px;
+    }
+
+    .card-detail {
+      font-size: 0.85rem;
+      color: $text-light;
+      line-height: 1.4;
+
+      .detail-label {
+        font-weight: 500;
+        color: $text-color;
+        margin-right: 4px;
+      }
+    }
+    .card-invested-value { // Specific style for invested value
+        display: block; // On its own line
+        margin-top: 8px;
+    }
+  }
+  
+  .card-legs-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    margin-bottom: 15px;
+
+    .leg-chip {
+      background-color: $chip-bg-color;
+      color: $chip-text-color;
+      font-size: 0.7rem; // Smaller chips
+      padding: 4px 10px; // Adjust padding for better look
+      border-radius: 15px; // More pill-like
+      white-space: nowrap;
+      border: 1px solid $chip-border-color;
+      font-weight: 500;
+    }
+    .more-legs {
+      font-style: italic;
+      background-color: transparent;
+      color: $text-light;
+      border: none;
+      padding-left: 0; // Align with other chips if no background
+    }
+  }
+
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid $border-color; // Lighter border
+
+    .card-date {
+      font-size: 0.75rem;
+      color: $text-light;
+    }
+
+    .card-action-btn {
+      background-color: transparent;
+      border: none;
+      padding: 6px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s ease;
+
+      &:hover {
+        background-color: darken($background-light, 5%);
+      }
+      .action-icon { // Class for icons like load to builder
+        font-size: 1.1rem; // Adjust icon size
+        color: $primary-color; // Use primary color for action icons
+      }
+    }
+  }
+}
+
+// General icon placeholder styling if needed (can be more specific)
+.icon-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
