@@ -1,39 +1,69 @@
 // src/features/StrategyVisualizer/sections/SummaryMetricsSection.scss
-@use '../../../index.scss' as *; // Changed from @import
 
 .sv-summary-metrics-section {
-  display: grid;
-  // As per image, it looks like 4 distinct groups/columns
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); // Responsive columns
-  gap: 20px; // Space between metric groups
+  background-color: #f8f9fa; // Light background for the section
   padding: 15px;
-  background-color: $background-light; // Light background for this section
-  border-radius: 6px;
-  border: 1px solid $border-color;
+  border-radius: 4px;
+  // border: 1px solid #dee2e6;
+  // margin-bottom: 20px; // Space below the section
 
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); // Responsive columns
+    gap: 20px; // Gap between metric groups
+
+    @media (max-width: 768px) {
+      grid-template-columns: 1fr; // Single column on smaller screens
+    }
+  }
 
   .metric-group {
-    // Each group is a flex column if MetricItems need to stack nicely
-    display: flex;
-    flex-direction: column;
-    gap: 8px; // Space between items within a group
+    // Styles for each logical group of metrics if needed
+    // For example, you might want borders or specific spacing for groups
 
-    h4 {
-      font-size: 13px;
-      color: $text-light; // Lighter color for group titles
-      margin-bottom: 5px; // Small space below title before items
-      font-weight: 400; // Normal weight for group titles
-      display: flex; // To align button with text
+    h4 { // If using h4 as group titles
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between; // For title and button alignment
       align-items: center;
-      justify-content: space-between; // For Risk/Reward and button
-    }
-    
-    .risk-reward-btn {
-        // From Button.scss (.btn-tertiary, .btn-size-small)
-        // Add specific overrides if needed
-        margin-left: auto; // Push button to the right if h4 doesn't use space-between
     }
 
-    // MetricItem.scss will style individual metric items
+    // Special styling for the first MetricItem if it's a group title without a value
+    .metric-item:first-child > .metric-label:only-child {
+        // If a metric-item's label is the only child (meaning no value part, just label acting as title)
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 10px;
+    }
+     .metric-item:first-child > .metric-value:empty + .metric-label {
+        // Another way to style if value is empty for a group title
+        font-weight: bold;
+    }
+
+    // Style the button within the Risk/Reward group title
+    .risk-reward-btn {
+      // Styles for the "1X" button
+      padding: 2px 6px;
+      font-size: 0.75rem;
+      // margin-left: auto; // Pushes button to the right
+    }
+  }
+  
+  .main-risk-metrics {
+    // Specific styles if needed for this group
+  }
+
+  .risk-reward-details {
+    // Specific styles if needed
+  }
+
+  .funds-margin-details {
+    // Specific styles if needed
   }
 }

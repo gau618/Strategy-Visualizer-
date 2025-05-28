@@ -1,0 +1,86 @@
+// src/features/StrategyVisualizer/components/PayoffTable.scss
+
+.payoff-table-container {
+  width: 100%;
+  overflow-x: auto; // Allows horizontal scrolling on smaller screens if table is wide
+  margin-top: 15px;  // Space above the table
+  margin-bottom: 15px; // Space below the table
+  border: 1px solid #e0e0e0; // Light border around the table container
+  border-radius: 6px;
+  background-color: #fff; // White background for the table area
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04); // Subtle shadow
+
+  table {
+    width: 100%;
+    border-collapse: collapse; // Clean borders
+    font-size: 0.875rem;      // Standard readable font size for tables
+
+    th, td {
+      border-bottom: 1px solid #e9ecef; // Lighter border for rows
+      padding: 10px 12px;             // Comfortable padding
+      text-align: right;              // Numbers are typically right-aligned
+      white-space: nowrap;            // Prevent text wrapping in cells unless necessary
+    }
+
+    th {
+      background-color: #f8f9fa;    // Light grey background for headers
+      font-weight: 600;             // Bold headers
+      color: #495057;               // Dark grey text for headers
+      border-top: none;             // No top border for the header cells
+      border-bottom-width: 2px;     // Thicker bottom border for header
+      border-bottom-color: #dee2e6; // Slightly darker border for header bottom
+    }
+
+    td {
+      color: #343a40; // Standard text color for data cells
+    }
+
+    // First column (Target Price) styling
+    td:first-child, th:first-child {
+      text-align: center;            // Center align target prices
+      font-weight: 500;            // Slightly bolder for target prices
+      // border-left: none; // No left border on the very first column
+    }
+    // Last column styling
+    // th:last-child, td:last-child {
+    //   border-right: none; // No right border on the very last column
+    // }
+
+
+    .profit-value {
+      color: #28a745; // Green for profit
+      font-weight: 500;
+    }
+
+    .loss-value {
+      color: #dc3545; // Red for loss
+      font-weight: 500;
+    }
+
+    // Highlight the row corresponding to the current Nifty Target
+    .highlighted-row {
+      background-color: #fff3cd; // A light yellow highlight (Bootstrap's .table-warning color)
+      // font-weight: bold; // Make text in highlighted row bold
+      
+      td {
+        // color: #664d03; // Darker text for better contrast on yellow, if needed
+      }
+    }
+
+    // Hover effect for rows for better readability
+    tbody tr:hover {
+      background-color: #f1f3f5; // Light grey hover
+    }
+  }
+}
+
+// Placeholder styling if no data is available
+.payoff-table-placeholder {
+  padding: 30px 20px;
+  text-align: center;
+  color: #6c757d; // Muted text color
+  font-style: italic;
+  background-color: #f8f9fa;
+  border: 1px dashed #dee2e6;
+  border-radius: 4px;
+}

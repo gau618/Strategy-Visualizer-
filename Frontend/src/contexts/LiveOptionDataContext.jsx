@@ -9,6 +9,7 @@ export const LiveOptionDataProvider = ({ children }) => {
     // 1. Get data from the hook.
     // optionChainMap will be an empty Map initially, then populated.
     // readyState will be CONNECTING initially.
+    
     const { optionChainMap, readyState } = useOptionChainWebSocket();
 
     // 2. Derive memoized values. These will correctly use 'optionChainMap'

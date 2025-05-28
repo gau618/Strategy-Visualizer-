@@ -1,8 +1,12 @@
-// backend/src/models/StrategyLeg.model.js
 import mongoose, { Schema } from "mongoose";
 
 const strategyLegSchema = new Schema(
   {
+    id: {
+      type: String,
+      required: [true, "Leg ID is required"],
+      trim: true,
+    },
     instrumentSymbol: {
       type: String,
       required: [true, "Instrument symbol is required"],
@@ -13,7 +17,10 @@ const strategyLegSchema = new Schema(
       required: [true, "Instrument token is required"],
       trim: true,
     },
-    strike: { type: Number, required: [true, "Strike price is required"] },
+    strike: {
+      type: Number,
+      required: [true, "Strike price is required"],
+    },
     optionType: {
       type: String,
       enum: ["CE", "PE"],
@@ -34,13 +41,34 @@ const strategyLegSchema = new Schema(
       required: [true, "Number of lots is required"],
       min: [1, "Lots must be at least 1"],
     },
-    price: { type: Number, required: [true, "Entry price is required"] },
+    price: {
+      type: Number,
+      required: [true, "Entry price is required"],
+    },
     lotSize: {
       type: Number,
       required: [true, "Lot size is required"],
       min: [1, "Lot size must be at least 1"],
     },
-    iv: { type: Number, min: 0 }, // Implied Volatility at time of save (as percentage, e.g., 20 for 20%)
+    iv: {
+      type: Number,
+      min: 0,
+    }, // Implied Volatility at time of save
+    selected: {
+      type: Boolean,
+      default: false,
+    },
+        status: {
+      type: String,
+      enum: [
+        "draft",
+        "active_position",
+        "my_strategy_template",
+        "closed_position",
+      ],
+      required: [true, "Strategy status is required"],
+      default: "draft",
+    },
   },
   { _id: false }
 ); // Subdocument, no separate _id needed by default

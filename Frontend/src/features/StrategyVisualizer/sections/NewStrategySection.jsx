@@ -1,10 +1,10 @@
-// frontend/src/features/StrategyVisualizer/sections/NewStrategySection.jsx
+// src/features/StrategyVisualizer/sections/NewStrategySection.jsx
 import React, { useMemo, useCallback } from "react";
-import Checkbox from "../../../components/Checkbox/Checkbox"; // Adjust path
-import Button from "../../../components/Button/Button"; // Adjust path
-import StrategyLegRow from "../components/StrategyLegRow"; // Adjust path
+import Checkbox from "../../../components/Checkbox/Checkbox";
+import Button from "../../../components/Button/Button";
+import StrategyLegRow from "../components/StrategyLegRow";
 import "./NewStrategySection.scss";
-import { DEFAULT_VOLATILITY } from "../../../config"; // Your specified path
+import { DEFAULT_VOLATILITY } from "../../../config";
 
 const HARDCODED_USER_ID_FOR_SAVE = "userTest01";
 
@@ -17,74 +17,35 @@ const NewStrategySection = ({
   getOptionByToken,
   underlyingSpotPrice,
 }) => {
-  // --- 1. Summary Calculations: MUST be defined FIRST ---
-  const {
-    totalPremium,
-    totalDelta,
-    totalGamma,
-    totalTheta,
-    totalVega,
-    priceGetNet,
-  } = useMemo(() => {
+  const { totalPremium, priceGetNet } = useMemo(() => {
     let premium = 0,
-      delta = 0,
-      gamma = 0,
-      theta = 0,
-      vega = 0,
       netPriceValue = 0;
-    if (!Array.isArray(strategyLegs)) {
-      return {
-        totalPremium: 0,
-        totalDelta: 0,
-        totalGamma: 0,
-        totalTheta: 0,
-        totalVega: 0,
-        priceGetNet: 0,
-      };
-    }
+    if (!Array.isArray(strategyLegs))
+      return { totalPremium: 0, priceGetNet: 0 };
+
     strategyLegs
       .filter((l) => l.selected)
       .forEach((leg) => {
-        const liveOpt =
-          getOptionByToken && leg.token ? getOptionByToken(leg.token) : null;
-        const legPrice =
-          typeof leg.price === "number" ? leg.price : liveOpt?.lastPrice || 0;
+        const legPrice = typeof leg.price === "number" ? leg.price : 0; // This is entry for active, LTP for new
         const legLots =
           typeof leg.lots === "number" && leg.lots > 0 ? leg.lots : 1;
         let legLotSize =
-          typeof leg.lotSize === "number" && leg.lotSize > 0 ? leg.lotSize : 0;
-        if (legLotSize === 0 && currentUnderlying) {
+          typeof leg.lotSize === "number" && leg.lotSize > 0 ? leg.lotSize : 1;
+        if (currentUnderlying) {
           if (currentUnderlying.toUpperCase().includes("BANKNIFTY"))
             legLotSize = 15;
           else if (currentUnderlying.toUpperCase().includes("FINNIFTY"))
             legLotSize = 40;
           else if (currentUnderlying.toUpperCase().includes("NIFTY"))
             legLotSize = 50;
-          else legLotSize = 1;
-        } else if (legLotSize === 0) {
-          legLotSize = 1;
         }
         const direction = leg.buySell === "Buy" ? 1 : -1;
-        premium += legPrice * direction * legLots * legLotSize * -1; // Debit is negative, Credit is positive
-        netPriceValue += legPrice * direction * -1; // Net price of the strategy per share (sum of option prices)
-        if (liveOpt) {
-          delta += (liveOpt.delta || 0) * direction * legLots * legLotSize;
-          gamma += (liveOpt.gamma || 0) * legLots * legLotSize;
-          theta += (liveOpt.theta || 0) * direction * legLots * legLotSize;
-          vega += (liveOpt.vega || 0) * legLots * legLotSize;
-        }
+        premium += legPrice * direction * legLots * legLotSize * -1;
+        netPriceValue += legPrice * direction * -1;
       });
-    return {
-      totalPremium: premium,
-      totalDelta: delta,
-      totalGamma: gamma,
-      totalTheta: theta,
-      totalVega: vega,
-      priceGetNet: netPriceValue,
-    };
-  }, [strategyLegs, getOptionByToken, currentUnderlying]);
+    return { totalPremium: premium, priceGetNet: netPriceValue };
+  }, [strategyLegs, currentUnderlying]);
 
-  // --- 2. Data Derivation Functions for Dropdowns ---
   const allExpiryOptions = useMemo(() => {
     if (
       !optionsForSelectedUnderlying ||
@@ -171,7 +132,6 @@ const NewStrategySection = ({
     [optionsForSelectedUnderlying]
   );
 
-  // --- 3. Leg Management Handlers ---
   const handleAddLeg = useCallback(() => {
     let newLeg = {
       id: `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
@@ -184,15 +144,14 @@ const NewStrategySection = ({
       strike: "",
       token: "",
       instrumentSymbol: "",
-      lotSize: 50,
+      lotSize: 50, // NIFTY default
       iv: DEFAULT_VOLATILITY * 100,
+      status: "new_leg", // Mark as a new, editable leg
     };
     if (currentUnderlying?.toUpperCase().includes("BANKNIFTY"))
       newLeg.lotSize = 15;
     else if (currentUnderlying?.toUpperCase().includes("FINNIFTY"))
       newLeg.lotSize = 40;
-    else if (currentUnderlying?.toUpperCase().includes("NIFTY"))
-      newLeg.lotSize = 50;
 
     if (allExpiryOptions.length > 0) {
       newLeg.expiry = allExpiryOptions[0].value;
@@ -219,7 +178,6 @@ const NewStrategySection = ({
           typesForDefaultStrike.find((t) => t.value === "CE")?.value ||
           typesForDefaultStrike[0]?.value ||
           "";
-
         if (newLeg.optionType) {
           const optionDetails = findOptionDetails(
             newLeg.expiry,
@@ -230,38 +188,23 @@ const NewStrategySection = ({
             newLeg.price =
               optionDetails.lastPrice !== undefined
                 ? parseFloat(optionDetails.lastPrice)
-                : 0;
+                : 0; // LTP for new leg
             newLeg.token = optionDetails.token;
             newLeg.instrumentSymbol =
-              optionDetails.instrumentSymbol &&
-              optionDetails.instrumentSymbol.trim() !== ""
-                ? optionDetails.instrumentSymbol
-                : optionDetails.symbol && optionDetails.symbol.trim() !== ""
-                ? optionDetails.symbol
-                : currentUnderlying &&
-                  newLeg.expiry &&
-                  newLeg.strike !== "" &&
-                  newLeg.optionType
-                ? `${currentUnderlying}${newLeg.expiry}${newLeg.strike}${newLeg.optionType}`
-                : "";
+              optionDetails.instrumentSymbol ||
+              optionDetails.symbol ||
+              `${currentUnderlying}${newLeg.expiry}${newLeg.strike}${newLeg.optionType}`;
             newLeg.lotSize = optionDetails.lotSize || newLeg.lotSize;
             newLeg.iv =
               optionDetails.iv !== undefined
                 ? parseFloat(optionDetails.iv)
                 : newLeg.iv;
           } else {
-            newLeg.instrumentSymbol =
-              currentUnderlying &&
-              newLeg.expiry &&
-              newLeg.strike !== "" &&
-              newLeg.optionType
-                ? `${currentUnderlying}${newLeg.expiry}${newLeg.strike}${newLeg.optionType}`
-                : "";
+            newLeg.instrumentSymbol = `${currentUnderlying}${newLeg.expiry}${newLeg.strike}${newLeg.optionType}`;
           }
         }
       }
     }
-    if (newLeg.instrumentSymbol === undefined) newLeg.instrumentSymbol = "";
     onStrategyLegsChange((prev) => [...prev, newLeg]);
   }, [
     onStrategyLegsChange,
@@ -276,36 +219,80 @@ const NewStrategySection = ({
   const handleLegChange = useCallback(
     (legId, field, value) => {
       onStrategyLegsChange((prevLegs) =>
-        prevLegs.map((leg) => {
-          if (leg.id === legId) {
-            let updatedLeg = { ...leg, [field]: value };
+        prevLegs.map((originalLeg) => {
+          if (originalLeg.id === legId) {
+            const isOriginalLegActivePosition =
+              originalLeg.status === "active_position";
+
+            // GUARD: If it's an active position and the field being changed is NOT 'selected',
+            // then NO modification should occur to any field other than 'selected'.
+            if (isOriginalLegActivePosition && field !== "selected") {
+              // console.log(`Blocked change to '${field}' for active position leg:`, originalLeg.instrumentSymbol);
+              return originalLeg; // Return the leg unchanged
+            }
+
+            let updatedLeg = { ...originalLeg, [field]: value };
+
+            // Standardize certain field types for all legs (even if it's just 'selected' for active ones)
             if (field === "strike")
               updatedLeg.strike = value !== "" ? Number(value) : "";
             if (field === "lots")
               updatedLeg.lots = Math.max(1, parseInt(value, 10) || 1);
-            if (field === "price") updatedLeg.price = parseFloat(value) || 0;
-            if (field === "iv") updatedLeg.iv = parseFloat(value) || 0;
 
-            if (field === "expiry") {
-              updatedLeg.strike = "";
-              updatedLeg.optionType = "";
-              const strikesForNewExpiry = getStrikesForExpiry(
-                updatedLeg.expiry
-              );
-              if (strikesForNewExpiry.length > 0) {
-                let atmStrikeObj =
-                  strikesForNewExpiry[
-                    Math.floor(strikesForNewExpiry.length / 2)
-                  ];
-                if (underlyingSpotPrice && strikesForNewExpiry.length > 1) {
-                  atmStrikeObj = strikesForNewExpiry.reduce((prev, curr) =>
-                    Math.abs(curr.value - underlyingSpotPrice) <
-                    Math.abs(prev.value - underlyingSpotPrice)
-                      ? curr
-                      : prev
+            // For price and IV:
+            // - If it's an active position, these fields are immutable (originalLeg.price is entry price).
+            // - If it's a new leg, allow direct manual change.
+            if (field === "price") {
+              updatedLeg.price = isOriginalLegActivePosition
+                ? originalLeg.price
+                : parseFloat(value) || 0;
+            }
+            if (field === "iv") {
+              updatedLeg.iv = isOriginalLegActivePosition
+                ? originalLeg.iv
+                : parseFloat(value) || 0;
+            }
+
+            // This block ONLY runs for NEW, EDITABLE legs.
+            // It handles cascading updates when Expiry, Strike, or Type change for a NEW leg.
+            if (
+              !isOriginalLegActivePosition &&
+              (field === "expiry" ||
+                field === "strike" ||
+                field === "optionType")
+            ) {
+              if (field === "expiry") {
+                updatedLeg.strike = "";
+                updatedLeg.optionType = ""; // Reset strike and type when expiry changes
+                const strikesForNewExpiry = getStrikesForExpiry(
+                  updatedLeg.expiry
+                );
+                if (strikesForNewExpiry.length > 0) {
+                  let atmStrikeObj =
+                    strikesForNewExpiry[
+                      Math.floor(strikesForNewExpiry.length / 2)
+                    ];
+                  if (underlyingSpotPrice && strikesForNewExpiry.length > 1) {
+                    atmStrikeObj = strikesForNewExpiry.reduce((prev, curr) =>
+                      Math.abs(curr.value - underlyingSpotPrice) <
+                      Math.abs(prev.value - underlyingSpotPrice)
+                        ? curr
+                        : prev
+                    );
+                  }
+                  updatedLeg.strike = atmStrikeObj.value;
+                  const typesForNewStrike = getTypesForExpiryStrike(
+                    updatedLeg.expiry,
+                    updatedLeg.strike
                   );
+                  updatedLeg.optionType =
+                    typesForNewStrike.find((t) => t.value === "CE")?.value ||
+                    typesForNewStrike[0]?.value ||
+                    "";
                 }
-                updatedLeg.strike = atmStrikeObj.value;
+              } else if (field === "strike" && updatedLeg.expiry) {
+                // Strike changed, expiry already set
+                updatedLeg.optionType = ""; // Reset type when strike changes
                 const typesForNewStrike = getTypesForExpiryStrike(
                   updatedLeg.expiry,
                   updatedLeg.strike
@@ -315,68 +302,56 @@ const NewStrategySection = ({
                   typesForNewStrike[0]?.value ||
                   "";
               }
-            } else if (field === "strike" && updatedLeg.expiry) {
-              updatedLeg.optionType = "";
-              const typesForNewStrike = getTypesForExpiryStrike(
-                updatedLeg.expiry,
-                updatedLeg.strike
-              );
-              updatedLeg.optionType =
-                typesForNewStrike.find((t) => t.value === "CE")?.value ||
-                typesForNewStrike[0]?.value ||
-                "";
-            }
+              // No specific action if only optionType changes, assuming strike/expiry are valid
 
-            if (
-              updatedLeg.expiry &&
-              updatedLeg.strike !== undefined &&
-              updatedLeg.strike !== "" &&
-              updatedLeg.optionType
-            ) {
-              const optionDetails = findOptionDetails(
-                updatedLeg.expiry,
-                updatedLeg.strike,
+              // Re-fetch option details based on potentially updated expiry/strike/type for the NEW leg
+              if (
+                updatedLeg.expiry &&
+                updatedLeg.strike !== "" &&
                 updatedLeg.optionType
-              );
-              if (optionDetails) {
-                updatedLeg.token = optionDetails.token;
-                updatedLeg.instrumentSymbol =
-                  optionDetails.instrumentSymbol &&
-                  optionDetails.instrumentSymbol.trim() !== ""
-                    ? optionDetails.instrumentSymbol
-                    : optionDetails.symbol && optionDetails.symbol.trim() !== ""
-                    ? optionDetails.symbol
-                    : currentUnderlying &&
-                      updatedLeg.expiry &&
-                      updatedLeg.strike !== "" &&
-                      updatedLeg.optionType
-                    ? `${currentUnderlying}${updatedLeg.expiry}${updatedLeg.strike}${updatedLeg.optionType}`
-                    : "";
-                updatedLeg.lotSize =
-                  optionDetails.lotSize || updatedLeg.lotSize;
-                if (field !== "price" && optionDetails.lastPrice !== undefined)
-                  updatedLeg.price = parseFloat(optionDetails.lastPrice);
-                if (field !== "iv" && optionDetails.iv !== undefined)
-                  updatedLeg.iv = parseFloat(optionDetails.iv);
-              } else {
-                updatedLeg.token = "";
-                updatedLeg.instrumentSymbol =
-                  currentUnderlying &&
-                  updatedLeg.expiry &&
-                  updatedLeg.strike !== "" &&
+              ) {
+                const optionDetails = findOptionDetails(
+                  updatedLeg.expiry,
+                  updatedLeg.strike,
                   updatedLeg.optionType
-                    ? `${currentUnderlying}${updatedLeg.expiry}${updatedLeg.strike}${updatedLeg.optionType}`
-                    : "";
+                );
+                if (optionDetails) {
+                  updatedLeg.token = optionDetails.token;
+                  updatedLeg.instrumentSymbol =
+                    optionDetails.instrumentSymbol ||
+                    optionDetails.symbol ||
+                    `${currentUnderlying}${updatedLeg.expiry}${updatedLeg.strike}${updatedLeg.optionType}`;
+                  updatedLeg.lotSize =
+                    optionDetails.lotSize || updatedLeg.lotSize; // Use existing if optionDetails doesn't have it
+
+                  // For NEW legs, update price/IV from optionDetails UNLESS the user was MANUALLY editing price/IV.
+                  if (
+                    field !== "price" &&
+                    optionDetails.lastPrice !== undefined
+                  ) {
+                    updatedLeg.price = parseFloat(optionDetails.lastPrice);
+                  }
+                  if (field !== "iv" && optionDetails.iv !== undefined) {
+                    updatedLeg.iv = parseFloat(optionDetails.iv);
+                  }
+                } else {
+                  // No option details found for the new combination
+                  updatedLeg.token = "";
+                  updatedLeg.instrumentSymbol = `${currentUnderlying}${updatedLeg.expiry}${updatedLeg.strike}${updatedLeg.optionType}`;
+                  if (field !== "price")
+                    updatedLeg.price = updatedLeg.price || 0;
+                  if (field !== "iv")
+                    updatedLeg.iv = updatedLeg.iv || DEFAULT_VOLATILITY * 100;
+                }
+              } else {
+                // Incomplete selection for option details
+                updatedLeg.token = "";
+                updatedLeg.instrumentSymbol = "";
               }
-            } else {
-              updatedLeg.token = "";
-              updatedLeg.instrumentSymbol = "";
             }
-            if (updatedLeg.instrumentSymbol === undefined)
-              updatedLeg.instrumentSymbol = "";
             return updatedLeg;
           }
-          return leg;
+          return originalLeg;
         })
       );
     },
@@ -391,36 +366,56 @@ const NewStrategySection = ({
   );
 
   const handleRemoveLeg = useCallback(
-    (legId) =>
-      onStrategyLegsChange((prev) => prev.filter((leg) => leg.id !== legId)),
+    (legId) => {
+      onStrategyLegsChange((prev) =>
+        prev.filter((leg) => {
+          if (leg.id === legId && leg.status === "active_position") {
+            alert(
+              "Active positions cannot be removed directly from the builder. Manage them through your positions list."
+            );
+            return true;
+          }
+          return leg.id !== legId;
+        })
+      );
+    },
     [onStrategyLegsChange]
   );
 
-  // VVVV COMPLETED VVVV
   const handleDuplicateLeg = useCallback(
     (legId) => {
       const legToDuplicate = strategyLegs.find((l) => l.id === legId);
       if (legToDuplicate) {
+        const optionDetails = findOptionDetails(
+          legToDuplicate.expiry,
+          legToDuplicate.strike,
+          legToDuplicate.optionType
+        );
         onStrategyLegsChange((prev) => [
           ...prev,
           {
             ...legToDuplicate,
             id: `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
             selected: true,
+            status: "new_leg",
+            price:
+              optionDetails?.lastPrice !== undefined
+                ? parseFloat(optionDetails.lastPrice)
+                : parseFloat(legToDuplicate.price),
+            iv:
+              optionDetails?.iv !== undefined
+                ? parseFloat(optionDetails.iv)
+                : parseFloat(legToDuplicate.iv),
           },
         ]);
       }
     },
-    [strategyLegs, onStrategyLegsChange]
+    [strategyLegs, onStrategyLegsChange, findOptionDetails]
   );
 
-  // VVVV COMPLETED VVVV
   const handleAnalyzeLeg = useCallback(
     (legId) => {
       const legToAnalyze = strategyLegs.find((l) => l.id === legId);
-      console.log("Analyzing Leg (Placeholder):", legToAnalyze);
-      // In a real app, this might open a modal with detailed greeks, chart for this leg, etc.
-      // Or it might select this leg for a different view in PayoffChartSection or DetailedDataSection.
       if (legToAnalyze) {
         alert(
           `Placeholder for Analyzing Leg: ${
@@ -432,15 +427,26 @@ const NewStrategySection = ({
     [strategyLegs]
   );
 
-  // VVVV COMPLETED VVVV
   const handleClearTrades = () => {
-    onStrategyLegsChange([]);
+    onStrategyLegsChange((prevLegs) =>
+      prevLegs.filter((leg) => leg.status === "active_position")
+    );
+    if (
+      strategyLegs.every((leg) => leg.status === "active_position") &&
+      strategyLegs.length > 0
+    ) {
+      alert(
+        "Cannot clear active positions. To start fresh with no legs, please change the underlying instrument."
+      );
+    }
   };
 
-  // VVVV COMPLETED VVVV
   const handleResetPrices = useCallback(() => {
     onStrategyLegsChange((prevLegs) =>
       prevLegs.map((leg) => {
+        if (leg.status === "active_position") {
+          return leg;
+        }
         const optDetails = findOptionDetails(
           leg.expiry,
           leg.strike,
@@ -454,27 +460,22 @@ const NewStrategySection = ({
     );
   }, [onStrategyLegsChange, findOptionDetails]);
 
-  // --- 4. Other UI State derived after summary ---
-  // VVVV COMPLETED VVVV
   const selectedTradesCount = useMemo(() => {
     if (!Array.isArray(strategyLegs)) return 0;
     return strategyLegs.filter((l) => l.selected).length;
   }, [strategyLegs]);
 
-  // VVVV COMPLETED VVVV
   const allTradesSelected = useMemo(() => {
     if (!Array.isArray(strategyLegs) || strategyLegs.length === 0) return false;
     return selectedTradesCount === strategyLegs.length;
   }, [strategyLegs, selectedTradesCount]);
 
-  // VVVV COMPLETED VVVV
   const handleSelectAllTrades = (isChecked) => {
     onStrategyLegsChange((prev) =>
       prev.map((leg) => ({ ...leg, selected: isChecked }))
     );
   };
 
-  // VVVV COMPLETED VVVV
   const firstSelectedLegForSummary = useMemo(() => {
     if (!Array.isArray(strategyLegs)) return null;
     return strategyLegs.find(
@@ -482,11 +483,15 @@ const NewStrategySection = ({
     );
   }, [strategyLegs]);
 
-  // --- 5. Handlers for "Trade All" and "Add to Drafts" ---
-  // VVVV COMPLETED VVVV
   const handleActionClick = (actionStatus, defaultNamePrefix) => {
-    if (strategyLegs.length === 0 || !strategyLegs.some((l) => l.selected)) {
-      alert("Please add and select at least one leg for the strategy.");
+    const legsForAction = strategyLegs.filter(
+      (leg) => leg.selected && leg.status !== "active_position"
+    );
+
+    if (legsForAction.length === 0) {
+      alert(
+        `Please add and select at least one new leg to ${defaultNamePrefix.toLowerCase()}. Active positions are not re-saved/re-traded from here.`
+      );
       return;
     }
     if (!currentUnderlying) {
@@ -494,29 +499,21 @@ const NewStrategySection = ({
       return;
     }
 
-    const activeLegs = strategyLegs.filter((leg) => leg.selected);
-    const legsAreValid = activeLegs.every(
+    const legsAreValid = legsForAction.every(
       (leg) =>
         leg.token &&
-        typeof leg.instrumentSymbol === "string" &&
-        leg.instrumentSymbol.trim() !== "" &&
+        leg.instrumentSymbol?.trim() &&
         leg.expiry &&
-        leg.strike !== undefined &&
         leg.strike !== "" &&
         leg.optionType &&
         leg.buySell &&
-        typeof leg.lots === "number" &&
         leg.lots >= 1 &&
         typeof leg.price === "number" &&
-        typeof leg.lotSize === "number" &&
         leg.lotSize >= 1 &&
         typeof leg.iv === "number"
     );
-
     if (!legsAreValid) {
-      alert(
-        "One or more selected legs have incomplete or invalid data. Please ensure all fields (Token, Symbol, Expiry, Strike, Type, B/S, Lots, Price, Lot Size, IV) are correctly set and Symbol is not empty."
-      );
+      alert("One or more selected new legs have incomplete or invalid data.");
       return;
     }
 
@@ -528,35 +525,28 @@ const NewStrategySection = ({
         "Enter a name for this draft strategy:",
         strategyName
       );
-      if (!promptedName || promptedName.trim() === "") return;
+      if (!promptedName?.trim()) return;
       strategyName = promptedName.trim();
     }
-
+        // **MODIFICATION START: Add/Update status for each leg being saved**
+    const legsToSaveWithStatus = legsForAction.map(leg => ({
+        ...leg, // Spread all existing leg properties
+        status: actionStatus // Set/overwrite the status of each leg to the overall actionStatus
+                          // e.g., if actionStatus is 'active_position', each leg will also get status: 'active_position'
+    }));
+    console.log("Saving strategy with legs:", legsToSaveWithStatus);
     const payload = {
       userId: HARDCODED_USER_ID_FOR_SAVE,
       underlying: currentUnderlying,
-      legs: activeLegs.map(({ id, selected, ...legData }) => ({
-        instrumentSymbol: legData.instrumentSymbol,
-        token: legData.token,
-        strike: Number(legData.strike),
-        optionType: legData.optionType,
-        expiry: legData.expiry,
-        buySell: legData.buySell,
-        lots: Number(legData.lots),
-        price: Number(legData.price),
-        lotSize: Number(legData.lotSize),
-        iv: Number(legData.iv),
-      })),
+      legs: legsToSaveWithStatus,
       status: actionStatus,
       name: strategyName,
     };
     onSaveStrategy(payload);
   };
 
-  // --- 6. JSX Return ---
   return (
     <section className="sv-new-strategy-section">
-      {/* ... (Full JSX as in the previous "final corrected code" response) ... */}
       <header className="new-strategy-header">
         <h2>
           Strategy Builder {currentUnderlying ? `(${currentUnderlying})` : ""}
@@ -567,7 +557,11 @@ const NewStrategySection = ({
               selectedTradesCount !== 1 ? "s" : ""
             } selected`}
             checked={allTradesSelected}
-            onChange={(e) => handleSelectAllTrades(e.target.checked)}
+            onChange={(e) =>
+              handleSelectAllTrades(
+                typeof e === "boolean" ? e : e.target.checked
+              )
+            }
             className="select-all-trades-checkbox"
             disabled={strategyLegs.length === 0}
           />
@@ -575,24 +569,27 @@ const NewStrategySection = ({
             variant="link"
             className="clear-trades-btn"
             onClick={handleClearTrades}
-            disabled={strategyLegs.length === 0}
+            disabled={
+              strategyLegs.filter((l) => l.status !== "active_position")
+                .length === 0
+            }
           >
-            Clear Trades
+            Clear New Trades
           </Button>
           <Button
             variant="link"
             onClick={handleResetPrices}
             disabled={
-              strategyLegs.length === 0 ||
+              strategyLegs.filter((l) => l.status !== "active_position")
+                .length === 0 ||
               !optionsForSelectedUnderlying ||
               optionsForSelectedUnderlying.length === 0
             }
           >
-            {" "}
             <span className="reset-prices-icon" role="img" aria-label="reset">
               ↻
             </span>{" "}
-            Reset Prices{" "}
+            Reset Prices
           </Button>
         </div>
       </header>
@@ -600,7 +597,11 @@ const NewStrategySection = ({
         <div className="leg-header-row">
           <Checkbox
             checked={allTradesSelected}
-            onChange={(e) => handleSelectAllTrades(e.target.checked)}
+            onChange={(e) =>
+              handleSelectAllTrades(
+                typeof e === "boolean" ? e : e.target.checked
+              )
+            }
             className="leg-header-checkbox"
             disabled={strategyLegs.length === 0}
           />
@@ -609,15 +610,7 @@ const NewStrategySection = ({
           <span>Strike</span>
           <span>Type</span>
           <span>Lots</span>
-          <span>
-            Price{" "}
-            <span
-              className="info-icon"
-              title="Live option price. Can be manually overridden."
-            >
-              ⓘ
-            </span>
-          </span>
+          <span>Entry Price</span>
           <span>Actions</span>
         </div>
         {Array.isArray(strategyLegs) &&
@@ -643,8 +636,8 @@ const NewStrategySection = ({
           })}
         {(!Array.isArray(strategyLegs) || strategyLegs.length === 0) && (
           <div className="no-legs-placeholder">
-            {" "}
-            Click "Add/Edit Strategy" or select from "Ready-made" to add trades.{" "}
+            Click "Add New Leg" or select from "Ready-made" / "Positions" to add
+            trades. Active positions for the selected underlying will load here.
           </div>
         )}
       </div>
@@ -673,7 +666,7 @@ const NewStrategySection = ({
           </span>
           <span
             className="info-icon"
-            title="Total cash flow. Positive for credit (received), negative for debit (paid)."
+            title="Total cash flow for selected legs. Positive for credit, negative for debit."
           >
             ⓘ
           </span>
@@ -688,25 +681,33 @@ const NewStrategySection = ({
             (allExpiryOptions && allExpiryOptions.length === 0)
           }
         >
-          Add/Edit Strategy
+          Add New Leg
         </Button>
         <Button
           variant="sell"
           className="sell-btn-footer"
           onClick={() => handleActionClick("active_position", "Trade")}
-          disabled={selectedTradesCount === 0}
+          disabled={
+            strategyLegs.filter(
+              (l) => l.selected && l.status !== "active_position"
+            ).length === 0
+          }
         >
-          Trade All Selected
+          Trade New Selected
         </Button>
         <Button
           variant="tertiary"
           icon="💾"
           className="save-strategy-btn"
-          title="Save Strategy as Draft"
+          title="Save New Legs as Draft"
           onClick={() => handleActionClick("draft", "Draft")}
-          disabled={selectedTradesCount === 0}
+          disabled={
+            strategyLegs.filter(
+              (l) => l.selected && l.status !== "active_position"
+            ).length === 0
+          }
         >
-          Add to Drafts
+          Draft New Selected
         </Button>
       </div>
     </section>
