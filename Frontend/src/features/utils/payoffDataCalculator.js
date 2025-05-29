@@ -75,7 +75,7 @@ export const calculateProjectedStrategyData = ({
 
   return {
     legs: projectedLegsResult,
-    totals: { projectedPnL: aggProjectedPnL, delta: aggDelta, gamma: aggGamma, theta: aggTheta, vega: aggVega },
+    totals: { projectedPnL: aggProjectedPnL, delta: aggDelta, gamma: aggGamma, theta: aggTheta, vega: aggVega},
   };
 };
 

@@ -22,7 +22,7 @@ const NewStrategySection = ({
       netPriceValue = 0;
     if (!Array.isArray(strategyLegs))
       return { totalPremium: 0, priceGetNet: 0 };
-
+   // console.log("Calculating total premium and net price for strategy legs:", strategyLegs);
     strategyLegs
       .filter((l) => l.selected)
       .forEach((leg) => {
@@ -31,14 +31,6 @@ const NewStrategySection = ({
           typeof leg.lots === "number" && leg.lots > 0 ? leg.lots : 1;
         let legLotSize =
           typeof leg.lotSize === "number" && leg.lotSize > 0 ? leg.lotSize : 1;
-        if (currentUnderlying) {
-          if (currentUnderlying.toUpperCase().includes("BANKNIFTY"))
-            legLotSize = 15;
-          else if (currentUnderlying.toUpperCase().includes("FINNIFTY"))
-            legLotSize = 40;
-          else if (currentUnderlying.toUpperCase().includes("NIFTY"))
-            legLotSize = 50;
-        }
         const direction = leg.buySell === "Buy" ? 1 : -1;
         premium += legPrice * direction * legLots * legLotSize * -1;
         netPriceValue += legPrice * direction * -1;
@@ -148,10 +140,6 @@ const NewStrategySection = ({
       iv: DEFAULT_VOLATILITY * 100,
       status: "new_leg", // Mark as a new, editable leg
     };
-    if (currentUnderlying?.toUpperCase().includes("BANKNIFTY"))
-      newLeg.lotSize = 15;
-    else if (currentUnderlying?.toUpperCase().includes("FINNIFTY"))
-      newLeg.lotSize = 40;
 
     if (allExpiryOptions.length > 0) {
       newLeg.expiry = allExpiryOptions[0].value;
@@ -185,6 +173,7 @@ const NewStrategySection = ({
             newLeg.optionType
           );
           if (optionDetails) {
+            console.log("Found option details for new leg:", optionDetails);
             newLeg.price =
               optionDetails.lastPrice !== undefined
                 ? parseFloat(optionDetails.lastPrice)
@@ -199,6 +188,7 @@ const NewStrategySection = ({
               optionDetails.iv !== undefined
                 ? parseFloat(optionDetails.iv)
                 : newLeg.iv;
+            newLeg.lotSize = optionDetails?.contractInfo?.lotSize
           } else {
             newLeg.instrumentSymbol = `${currentUnderlying}${newLeg.expiry}${newLeg.strike}${newLeg.optionType}`;
           }

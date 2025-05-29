@@ -43,7 +43,7 @@ const GreeksTable = ({ projectedLegsData, totals }) => {
                 <td>{formatGreekValue(leg.projectedGreeks.gamma, 4)}</td> {/* Gamma is usually displayed positive for the contract */}
                 <td>{formatGreekValue(leg.projectedGreeks.theta * direction, 2)}</td>
                 {/* Vega from black76Greeks is raw, scale by /100 for per 1% display */}
-                <td>{formatGreekValue(leg.projectedGreeks.vega ? (leg.projectedGreeks.vega / 100) * direction : null, 2)}</td>
+                <td>{formatGreekValue(leg.projectedGreeks.vega ? (leg.projectedGreeks.vega) * direction : null, 2)}</td>
               </tr>
             );
           })}
@@ -55,7 +55,7 @@ const GreeksTable = ({ projectedLegsData, totals }) => {
               <td>{formatGreekValue(totals.gamma, 4)}</td>
               <td>{formatGreekValue(totals.theta, 2)}</td>
               {/* Total Vega is also raw, scale by /100 for per 1% display */}
-              <td>{formatGreekValue(totals.vega ? totals.vega / 100 : null, 2)}</td>
+              <td>{formatGreekValue(totals.vega ? totals.vega  : null, 2)}</td>
             </tr>
           )}
         </tbody>

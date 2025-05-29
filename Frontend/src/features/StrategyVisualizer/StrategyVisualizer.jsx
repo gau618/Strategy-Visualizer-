@@ -241,6 +241,7 @@ const StrategyVisualizer = () => {
 
   const handleLoadStrategyLegsIntoBuilder = useCallback(
     (legsToLoad, itemStatus) => {
+      console.log(legsToLoad)
       const newLegs = legsToLoad.map((leg) => ({
         ...leg,
         id:

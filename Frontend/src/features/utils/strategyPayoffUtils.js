@@ -257,56 +257,6 @@ export const generatePayoffChartData = ({
   };
 };
 
-export const generatePayoffTableData = ({
-  strategyLegs,
-  niftyTargetString,
-  displaySpotForSlider,
-  targetDateISO,
-  riskFreeRate,
-  getScenarioIV,
-  getOptionByToken,
-  targetInterval,
-}) => {
-  const selectedLegs = strategyLegs.filter(
-    (l) => l.selected && l.token && typeof l.price === "number"
-  );
-  if (selectedLegs.length === 0) return [];
-  const currentScenarioSpot =
-    niftyTargetString !== "" && !isNaN(parseFloat(niftyTargetString))
-      ? parseFloat(niftyTargetString)
-      : typeof displaySpotForSlider === "number"
-      ? displaySpotForSlider
-      : parseFloat(displaySpotForSlider);
-  if (isNaN(currentScenarioSpot) || currentScenarioSpot <= 0) return [];
-  const tableRows = [];
-  const halfPoints = Math.floor(PAYOFF_TABLE_POINTS / 2);
-  const intervalStep = Number(targetInterval) || PAYOFF_TABLE_INTERVAL_STEP;
-  for (let i = -halfPoints; i <= halfPoints; i++) {
-    const targetPrice = currentScenarioSpot + i * intervalStep;
-    if (targetPrice < 0.01 && i !== 0) continue;
-    let pnlAtTargetDate = 0;
-    let pnlAtExpiry = 0;
-    selectedLegs.forEach((leg) => {
-      pnlAtTargetDate += calculateLegPnLAtTargetDate(
-        leg,
-        targetPrice,
-        targetDateISO,
-        riskFreeRate,
-        getScenarioIV(leg.token),
-        getOptionByToken
-      );
-      pnlAtExpiry += calculateLegPnLAtExpiry(leg, targetPrice);
-    });
-    tableRows.push({
-      targetPrice: targetPrice,
-      pnlAtTargetDate: pnlAtTargetDate,
-      pnlAtExpiry: pnlAtExpiry,
-      isCurrentTarget: i === 0,
-    });
-  }
-  return tableRows;
-};
-
 export const generateGreeksTableData = ({
   strategyLegs,
   niftyTarget,
@@ -450,4 +400,141 @@ export const generateGreeksTableData = ({
       vega: aggVega,
     },
   };
+};
+
+
+function calculateLegIntrinsicValueAtExpiry(leg, spot) {
+  const strike = Number(leg.strike);
+  if (leg.optionType === "CE") return Math.max(0, spot - strike);
+  if (leg.optionType === "PE") return Math.max(0, strike - spot);
+  return 0;
+}
+
+/**
+ * Calculate the payoff (profit/loss) of a single leg at expiry.
+ */
+function calculateLegPayoffAtExpiry(leg, spot) {
+  const intrinsic = calculateLegIntrinsicValueAtExpiry(leg, spot);
+  const premium = parseFloat(leg.price);
+  const lotSize = leg.lotSize || 1;
+  const lots = leg.lots || 1;
+  const quantity = lotSize * lots;
+  const direction = leg.buySell === "Buy" ? 1 : -1;
+  return (intrinsic - premium) * direction * quantity;
+}
+
+/**
+ * Calculate the P&L of a single leg at the target date using Black-76 price.
+ * @param {Object} leg - The option leg
+ * @param {number} spot - Target underlying price
+ * @param {string} targetDateISO - Target date in ISO format
+ * @param {number} riskFreeRate - Annualized risk-free rate (decimal, e.g. 0.06)
+ * @param {number} iv - Implied volatility (decimal, e.g. 0.18)
+ * @param {Function} getOptionByToken - Function to get option details by token
+ * @returns {number}
+ */
+function calculateLegPnLAtTargetDate(
+  leg,
+  spot,
+  targetDateISO,
+  riskFreeRate,
+  iv,
+  getOptionByToken
+) {
+  // Get option details (e.g., expiry date)
+  const option = getOptionByToken(leg.token);
+  if (!option) return 0;
+
+  // Calculate time to expiry in years
+  const expiryDate = new Date(option.expiry);
+  const targetDate = new Date(targetDateISO);
+  const msInYear = 365 * 24 * 60 * 60 * 1000;
+  const timeToExpiry = Math.max((expiryDate - targetDate) / msInYear, 0);
+
+  // Black-76 price at target date
+  const isCall = leg.optionType === "CE";
+  const strike = Number(leg.strike);
+  const premium = parseFloat(leg.price);
+  const lotSize = leg.lotSize || 1;
+  const lots = leg.lots || 1;
+  const quantity = lotSize * lots;
+  const direction = leg.buySell === "Buy" ? 1 : -1;
+
+  // Use Black-76 to get theoretical price at target date
+  const theoPrice = black76Price({
+    isCall,
+    future: spot, // For index options, spot is used as future
+    strike,
+    time: timeToExpiry,
+    rate: riskFreeRate,
+    vol: iv,
+  });
+
+  return (theoPrice - premium) * direction * quantity;
+}
+
+/**
+ * Generate the payoff table for the entire strategy.
+ */
+export const generatePayoffTableData = ({
+  strategyLegs,
+  niftyTargetString,
+  displaySpotForSlider,
+  targetDateISO,
+  riskFreeRate,
+  getScenarioIV,
+  getOptionByToken,
+  targetInterval,
+  PAYOFF_TABLE_POINTS = 20,
+  PAYOFF_TABLE_INTERVAL_STEP = 50,
+}) => {
+  // Filter valid, selected legs
+  const selectedLegs = strategyLegs.filter(
+    (l) => l.selected && l.token && typeof l.price === "number"
+  );
+  if (selectedLegs.length === 0) return [];
+
+  // Determine scenario spot
+  const currentScenarioSpot =
+    niftyTargetString !== "" && !isNaN(parseFloat(niftyTargetString))
+      ? parseFloat(niftyTargetString)
+      : typeof displaySpotForSlider === "number"
+      ? displaySpotForSlider
+      : parseFloat(displaySpotForSlider);
+  if (isNaN(currentScenarioSpot) || currentScenarioSpot <= 0) return [];
+
+  const tableRows = [];
+  const halfPoints = Math.floor(PAYOFF_TABLE_POINTS / 2);
+  const intervalStep = Number(targetInterval) || PAYOFF_TABLE_INTERVAL_STEP;
+
+  for (let i = -halfPoints; i <= halfPoints; i++) {
+    const targetPrice = currentScenarioSpot + i * intervalStep;
+    if (targetPrice < 0.01 && i !== 0) continue;
+
+    // Sum P&L at target date and at expiry for all legs
+    let pnlAtTargetDate = 0;
+    let pnlAtExpiry = 0;
+
+    selectedLegs.forEach((leg) => {
+      // P&L at target date (uses Black-76)
+      pnlAtTargetDate += calculateLegPnLAtTargetDate(
+        leg,
+        targetPrice,
+        targetDateISO,
+        riskFreeRate,
+        getScenarioIV(leg.token),
+        getOptionByToken
+      );
+      // P&L at expiry (intrinsic value only)
+      pnlAtExpiry += calculateLegPayoffAtExpiry(leg, targetPrice);
+    });
+
+    tableRows.push({
+      targetPrice: Number(targetPrice.toFixed(2)),
+      pnlAtTargetDate: Number(pnlAtTargetDate.toFixed(2)),
+      pnlAtExpiry: Number(pnlAtExpiry.toFixed(2)),
+      isCurrentTarget: i === 0,
+    });
+  }
+  return tableRows;
 };

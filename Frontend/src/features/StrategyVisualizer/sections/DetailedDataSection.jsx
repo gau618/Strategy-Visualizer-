@@ -169,7 +169,7 @@ const DetailedDataSection = ({
       delta: aggDelta,
       gamma: aggGamma,
       theta: aggTheta,
-      vega: aggVega / 100,
+      vega: aggVega ,
     };
   }, [
     strategyLegs,
