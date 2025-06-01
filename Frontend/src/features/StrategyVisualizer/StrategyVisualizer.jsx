@@ -29,7 +29,7 @@ const StrategyVisualizer = () => {
   const [strategyLegs, setStrategyLegs] = useState([]);
   const [activeChartTab, setActiveChartTab] = useState("payoffgraph");
   const [activeMainTab, setActiveMainTab] = useState("readymade");
-
+  const [multiplier, setMultiplier] = useState(1);
   const [niftyTarget, setNiftyTarget] = useState("");
   const [isNiftyTargetManuallySet, setIsNiftyTargetManuallySet] =
     useState(false);
@@ -43,7 +43,7 @@ const StrategyVisualizer = () => {
   const [individualIvAdjustments, setIndividualIvAdjustments] = useState({});
   const [multiplyByLotSize, setMultiplyByLotSizeState] = useState(true);
   const [multiplyByNumLots, setMultiplyByNumLotsState] = useState(true);
-
+  
   const [userPositions, setUserPositions] = useState([]);
   const [mySavedStrategies, setMySavedStrategies] = useState([]);
   const [draftStrategies, setDraftStrategies] = useState([]);
@@ -52,6 +52,7 @@ const StrategyVisualizer = () => {
     myStrategies: false,
     drafts: false,
   });
+  const [sdDays, setSdDays] = useState(7);
 
   const underlyingSpotPrice = useMemo(() => {
     if (!searchTerm || !liveOptionChainMap || liveOptionChainMap.size === 0)
@@ -90,50 +91,51 @@ const StrategyVisualizer = () => {
     ) {
     }
   }, [underlyingSpotPrice, isNiftyTargetManuallySet, niftyTarget]);
-
-  useEffect(() => {
-    const loadActivePositionsForBuilder = async () => {
-      if (searchTerm && HARDCODED_USER_ID) {
-        try {
-          const activeStrategies = await fetchStrategies({
-            userId: HARDCODED_USER_ID,
-            status: "active_position",
-          });
-          const activeLegsForCurrentUnderlying = activeStrategies
-            .filter((strategy) => strategy.underlying === searchTerm)
-            .flatMap((strategy) => strategy.legs || [])
-            .map((leg) => ({
-              ...leg,
-              id:
-                leg.id ||
-                `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-              price: parseFloat(leg.price) || 0,
-              iv:
-                leg.iv !== undefined
-                  ? parseFloat(leg.iv)
-                  : DEFAULT_VOLATILITY * 100,
-              lots: parseInt(leg.lots, 10) || 1,
-              selected: leg.selected !== undefined ? leg.selected : true,
-            }));
-          setStrategyLegs(activeLegsForCurrentUnderlying);
-        } catch (error) {
-          console.error(
-            `StrategyVisualizer: Error fetching active positions for builder (underlying: ${searchTerm}):`,
-            error
-          );
-          setStrategyLegs([]);
-        }
-      } else if (!searchTerm) {
-        setStrategyLegs([]);
-      }
-    };
-    loadActivePositionsForBuilder();
-  }, [searchTerm]);
+console.log(sdDays);
+  // useEffect(() => {
+  //   const loadActivePositionsForBuilder = async () => {
+  //     if (searchTerm && HARDCODED_USER_ID) {
+  //       try {
+  //         const activeStrategies = await fetchStrategies({
+  //           userId: HARDCODED_USER_ID,
+  //           status: "active_position",
+  //         });
+  //         const activeLegsForCurrentUnderlying = activeStrategies
+  //           .filter((strategy) => strategy.underlying === searchTerm)
+  //           .flatMap((strategy) => strategy.legs || [])
+  //           .map((leg) => ({
+  //             ...leg,
+  //             id:
+  //               leg.id ||
+  //               `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+  //             price: parseFloat(leg.price) || 0,
+  //             iv:
+  //               leg.iv !== undefined
+  //                 ? parseFloat(leg.iv)
+  //                 : DEFAULT_VOLATILITY * 100,
+  //             lots: parseInt(leg.lots, 10) || 1,
+  //             selected: leg.selected !== undefined ? leg.selected : true,
+  //           }));
+  //         setStrategyLegs(activeLegsForCurrentUnderlying);
+  //       } catch (error) {
+  //         console.error(
+  //           `StrategyVisualizer: Error fetching active positions for builder (underlying: ${searchTerm}):`,
+  //           error
+  //         );
+  //         setStrategyLegs([]);
+  //       }
+  //     } else if (!searchTerm) {
+  //       setStrategyLegs([]);
+  //     }
+  //   };
+  //   loadActivePositionsForBuilder();
+  // }, [searchTerm]);
 
   const handleInstrumentTypeChange = useCallback(
     (type) => setInstrumentType(type),
     []
   );
+  const handleSdDaysChange = useCallback((days) => setSdDays(days), []);
   const handleSearchTermChange = useCallback((term) => {
     setSearchTerm(term);
     setIsNiftyTargetManuallySet(false);
@@ -350,7 +352,10 @@ const payoffChartProps = {
     onMultiplyByLotSizeChange: handleMultiplyLotSizeChange,
     multiplyByNumLots,
     onMultiplyByNumLotsChange: handleMultiplyNumLotsChange,
+    handleSdDaysChange: handleSdDaysChange,
+    sdDays, // Pass the SD days for SD bands
     // getScenarioIV is already in commonScenarioProps
+     multiplier
   };
   
 
@@ -370,6 +375,8 @@ const payoffChartProps = {
     onMultiplyByNumLotsChange: handleMultiplyNumLotsChange,
     liveOptionChainMap,
     underlyingSpotPrice, // Pass live spot for consistency if needed
+    sdDays,
+    multiplier
   };
   const readyMadeStrategiesProps = {
     activeMainTab,
@@ -393,8 +400,10 @@ const payoffChartProps = {
     onSaveStrategy: handleSaveStrategyFromBuilder,
     getOptionByToken,
     underlyingSpotPrice,
+    multiplier,
+    setMultiplier,
   };
-
+  console.log(multiplier);
   return (
     <div className="strategy-visualizer-container">
       <HeaderSection />

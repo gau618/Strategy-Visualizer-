@@ -12,6 +12,7 @@ export const LiveOptionDataProvider = ({ children }) => {
     
     const { optionChainMap, readyState } = useOptionChainWebSocket();
 
+
     // 2. Derive memoized values. These will correctly use 'optionChainMap'
     // which is in scope from the line above.
     const availableUnderlyings = useMemo(() => {

@@ -3,7 +3,7 @@ import React from 'react';
 import { formatDisplayValue } from '../../utils/formatters';
 import './PayoffTable.scss';
 
-const PayoffTable = ({ payoffData, targetDate }) => {
+const PayoffTable = ({ payoffData, targetDate,multiplier=1 }) => {
   if (!payoffData || payoffData.length === 0) {
     return <div className="payoff-table-placeholder">No payoff data to display for the current selection.</div>;
   }
@@ -25,10 +25,10 @@ const PayoffTable = ({ payoffData, targetDate }) => {
                 {formatDisplayValue(Number(row.targetPrice), "currency", {digits:0, prefix:""})} 
               </td>
               <td className={row.pnlAtTargetDate >= 0 ? 'profit-value' : 'loss-value'}>
-                {formatDisplayValue(row.pnlAtTargetDate, "currency_pnl", {prefix:"₹", showSign: true})}
+                {formatDisplayValue(row.pnlAtTargetDate*multiplier, "currency_pnl", {prefix:"₹", showSign: true})}
               </td>
               <td className={row.pnlAtExpiry >= 0 ? 'profit-value' : 'loss-value'}>
-                {formatDisplayValue(row.pnlAtExpiry, "currency_pnl", {prefix:"₹", showSign: true})}
+                {formatDisplayValue(row.pnlAtExpiry*multiplier, "currency_pnl", {prefix:"₹", showSign: true})}
               </td>
             </tr>
           ))}

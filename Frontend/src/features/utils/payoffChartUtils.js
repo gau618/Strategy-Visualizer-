@@ -1,327 +1,242 @@
-// src/features/StrategyVisualizer/utils/payoffChartUtils.js
+// src/features/StrategyVisualizer/utils/payoffGraphUtils.js
 
-// Ensure these utilities are available and correctly implemented in their respective files
-import { black76Price, timeToExpiryDays } from './optionPricingUtils'; 
-import { PAYOFF_CHART_POINTS, PAYOFF_CHART_XAXIS_STRIKE_PADDING_FACTOR, SPOT_SLIDER_STEP } from '../../config'; // Adjust path as needed
-// Example for optionPricingUtils.js
-const timeToExpiry = (expiryDateISOString, fromDate = new Date()) => {
-  const expiry = new Date(expiryDateISOString); // Parses ISO string
-  
-  // Option 1: Simple difference, might give 0 for same day if target time is past
-  // const diffTime = expiry.getTime() - fromDate.getTime();
-  // const diffDays = diffTime / (1000 * 60 * 60 * 24);
-  // return Math.max(0, diffDays); // Ensure it's not negative for this use case
+import { black76Price } from "./optionPricingUtils";
 
-  // Option 2: More robust "calendar days until" (often preferred for DTE in options)
-  // Set both to midnight in their respective local timezones to count calendar days
-  const expiryAtMidnight = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
-  const fromAtMidnight = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
-  
-  const diffTimeMs = expiryAtMidnight.getTime() - fromAtMidnight.getTime();
-  if (diffTimeMs < 0) return 0; // Target date is in the past
-
-  const diffDays = Math.ceil(diffTimeMs / (1000 * 60 * 60 * 24)); 
-  // Use Math.ceil if "any part of today counts as 1 day if expiry is today"
-  // Use Math.round or Math.floor if partial days are handled differently.
-  // For SD bands, a small positive DTE is needed if expiry is today but later.
-  // If you need sub-day precision for SD bands, the timeFactor should be calculated differently.
-
-  // For SD bands, if it's the same day but future time, you might want a fraction of a day.
-  // If targetDateISO is today, but future time:
-  if (expiryAtMidnight.getTime() === fromAtMidnight.getTime()) {
-      const timeDiffMsToday = expiry.getTime() - fromDate.getTime();
-      if (timeDiffMsToday > 0) {
-          return timeDiffMsToday / (1000 * 60 * 60 * 24); // Returns a fraction e.g., 0.25 for 6 hours left
-      }
-      return 0; // Target time has passed today
-  }
-  
-  return diffDays > 0 ? diffDays : 0; // Ensure non-negative
-};
-
-
-// Helper: P&L for a single leg at Expiry
-const calculateLegPnLAtExpiry = (leg, underlyingPriceAtExpiry) => {
+// --- Calculation Helpers --- (Keep these as they are)
+function calculateLegValueAtExpiry(leg, spot) {
   const strike = Number(leg.strike);
-  const entryPrice = parseFloat(leg.price);
-  // Ensure lots and lotSize are numbers, default to 1 if not provided or invalid
-  const lots = (typeof leg.lots === 'number' && leg.lots > 0) ? leg.lots : 1;
-  const lotSize = (typeof leg.lotSize === 'number' && leg.lotSize > 0) ? leg.lotSize : 1;
-  const quantity = lots * lotSize;
+  if (leg.optionType === "CE") return Math.max(0, spot - strike);
+  if (leg.optionType === "PE") return Math.max(0, strike - spot);
+  return 0;
+}
+
+function calculateLegPnLAtExpiry(leg, spot) {
+  const intrinsic = calculateLegValueAtExpiry(leg, spot);
+  const premium = parseFloat(leg.price);
+  const lotSize = leg.contractInfo?.lotSize || leg.lotSize || 1;
+  const lots = leg.lots || 1;
+  const quantity = lotSize * lots;
   const direction = leg.buySell === "Buy" ? 1 : -1;
-  let optionValueAtExpiry = 0;
+  return (intrinsic - premium) * direction * quantity;
+}
 
-  if (leg.optionType === "CE") {
-    optionValueAtExpiry = Math.max(0, underlyingPriceAtExpiry - strike);
-  } else if (leg.optionType === "PE") {
-    optionValueAtExpiry = Math.max(0, strike - underlyingPriceAtExpiry);
+function calculateLegTheoreticalPrice(
+  leg, spot, targetDateISO, riskFreeRate, scenarioIV, getOptionByToken
+) {
+  const option = getOptionByToken(leg.token);
+  if (!option || !option.expiry) return parseFloat(leg.price);
+  const expiryDate = new Date(option.expiry);
+  const targetDate = new Date(targetDateISO);
+  const msInYear = 365 * 24 * 60 * 60 * 1000;
+  const timeToExpiry = Math.max((expiryDate - targetDate) / msInYear, 0);
+  if (timeToExpiry <= 0 || scenarioIV <= 0) {
+    return calculateLegValueAtExpiry(leg, spot);
   }
-  // Ensure entryPrice is a number
-  if (isNaN(entryPrice)) {
-      console.warn(`[payoffChartUtils.calculateLegPnLAtExpiry] Invalid entry price for leg:`, leg);
-      return (optionValueAtExpiry * direction * quantity); // P&L is just payoff if entry price is invalid
-  }
-  return (optionValueAtExpiry - entryPrice) * direction * quantity;
-};
+  return black76Price(spot, Number(leg.strike), timeToExpiry, riskFreeRate, scenarioIV, leg.optionType);
+}
 
-// Helper: P&L for a single leg at Target Date (T+0)
-const calculateLegPnLAtTargetDate = (
-  leg,
-  underlyingPriceAtTarget,
-  targetDateISO,
-  riskFreeRate,
-  scenarioIV, // Decimal IV for this leg's scenario (e.g., 0.25 for 25%)
-  getOptionByToken // Function to get leg.expiry (ISO string), leg.strike (number)
-) => {
-
-  const liveOptionData = getOptionByToken(leg.token); // Expects { expiry: 'ISO_STRING', strike: number }
- // console.log(liveOptionData, leg.token, "liveOptionData for leg");
-  if (!liveOptionData || !liveOptionData.expiry) {
-    console.warn(`[payoffChartUtils.calculateLegPnLAtTargetDate] Missing expiry/strike for leg ${leg.token} for T+0 calc. Falling back to expiry P&L.`);
-    return calculateLegPnLAtExpiry(leg, underlyingPriceAtTarget);
-  }
-
-  const TTE = timeToExpiry(liveOptionData.expiry, new Date(targetDateISO)); // Expects timeToExpiry to handle dates correctly
-  const strike = Number(liveOptionData.strike); // Use strike from liveOptionData if more reliable
-  const entryPrice = parseFloat(leg.price);
-  const lots = (typeof leg.lots === 'number' && leg.lots > 0) ? leg.lots : 1;
-  const lotSize = (typeof leg.lotSize === 'number' && leg.lotSize > 0) ? leg.lotSize : 1;
-  const quantity = lots * lotSize;
+function calculateLegPnLAtTargetDate(
+  leg, spot, targetDateISO, riskFreeRate, scenarioIV, getOptionByToken
+) {
+  const theoPrice = calculateLegTheoreticalPrice(leg, spot, targetDateISO, riskFreeRate, scenarioIV, getOptionByToken);
+  const premium = parseFloat(leg.price);
+  const lotSize = leg.contractInfo?.lotSize || leg.lotSize || 1;
+  const lots = leg.lots || 1;
+  const quantity = lotSize * lots;
   const direction = leg.buySell === "Buy" ? 1 : -1;
+  return (theoPrice - premium) * direction * quantity;
+}
 
-  if (TTE <= 0.000001) { // At or past expiry (using a small epsilon)
-    return calculateLegPnLAtExpiry(leg, underlyingPriceAtTarget);
-  }
+function snapToInterval(spot, interval) {
+  if (interval === 0 || isNaN(interval)) return spot;
+  return Math.round(spot / interval) * interval;
+}
 
-  if (isNaN(scenarioIV) || scenarioIV <= 0) {
-    console.warn(`[payoffChartUtils.calculateLegPnLAtTargetDate] Invalid scenarioIV (${scenarioIV}) for leg ${leg.token}. Using intrinsic for T+0.`);
-    let intrinsicValue = 0;
-    if (leg.optionType === "CE") intrinsicValue = Math.max(0, underlyingPriceAtTarget - strike);
-    else if (leg.optionType === "PE") intrinsicValue = Math.max(0, strike - underlyingPriceAtTarget);
-    
-    if (isNaN(entryPrice)) return (intrinsicValue * direction * quantity);
-    return (intrinsicValue - entryPrice) * direction * quantity;
-  }
-  
-  if (isNaN(riskFreeRate)) {
-      console.warn(`[payoffChartUtils.calculateLegPnLAtTargetDate] Invalid riskFreeRate (${riskFreeRate}). Using 0.`);
-      riskFreeRate = 0;
-  }
-
-  const theoreticalPrice = black76Price(
-    underlyingPriceAtTarget, // Assuming F = S for spot options pricing model
-    strike,
-    TTE,
-    riskFreeRate,
-    scenarioIV,
-    leg.optionType
-  );
-
-  if (isNaN(theoreticalPrice)) {
-      console.warn(`[payoffChartUtils.calculateLegPnLAtTargetDate] black76Price returned NaN for leg ${leg.token}. Inputs: S=${underlyingPriceAtTarget}, K=${strike}, TTE=${TTE}, r=${riskFreeRate}, IV=${scenarioIV}, Type=${leg.optionType}`);
-      // Fallback if pricing model fails, perhaps to intrinsic or zero change from entry
-      let fallbackValue = 0;
-      if (leg.optionType === "CE") fallbackValue = Math.max(0, underlyingPriceAtTarget - strike);
-      else if (leg.optionType === "PE") fallbackValue = Math.max(0, strike - underlyingPriceAtTarget);
-      if (isNaN(entryPrice)) return (fallbackValue * direction * quantity);
-      return (fallbackValue - entryPrice) * direction * quantity;
-  }
-  if (isNaN(entryPrice)) return (theoreticalPrice * direction * quantity);
-  return (theoreticalPrice - entryPrice) * direction * quantity;
-};
-
-// Helper to get a representative IV for SD bands
-const getRepresentativeIVForSD = (selectedLegs, currentSpot, getOptionByToken, defaultIV = 0.20) => {
-    if (!selectedLegs || selectedLegs.length === 0 || !currentSpot || currentSpot <= 0 || !getOptionByToken) {
-        console.warn("[payoffChartUtils.getRepresentativeIVForSD] Invalid inputs for SD IV calc. Using default.", { legs: selectedLegs?.length, currentSpot, getOptionByToken: !!getOptionByToken });
-        return defaultIV;
-    }
-    
-    let closestAtmLegIV = null; 
-    let minDiffToAtm = Infinity;
-
-    selectedLegs.forEach(sl => {
-        const legData = getOptionByToken(sl.token); // Expects getOptionByToken to return { ..., iv: numericIV_in_percent (e.g., 25.5), strike: numericStrike }
-        if (legData && typeof Number(legData.iv) === 'number' && legData.iv > 0) {
-            const strikeDiff = Math.abs(legData.strike - currentSpot);
-            if (strikeDiff < minDiffToAtm) {
-                minDiffToAtm = strikeDiff;
-                closestAtmLegIV = Number(legData.iv) / 100; // Convert % to decimal
-            }
-        }
-    });
-    console.log(closestAtmLegIV)
-    if (closestAtmLegIV !== null && closestAtmLegIV > 0) {
-        return closestAtmLegIV;
-    }
-    
-    // Fallback: average IV of selected legs if available and valid
-    let ivSum = 0;
-    let validIVCount = 0;
-    selectedLegs.forEach(sl => { 
-        const legData = getOptionByToken(sl.token); 
-        if (legData && typeof legData.iv === 'number' && legData.iv > 0) { 
-            ivSum += legData.iv; 
-            validIVCount++; 
-        }
-    });
-    if (validIVCount > 0) {
-        return (ivSum / validIVCount) / 100; // Average IV, converted to decimal
-    }
-    
-    console.warn("[payoffChartUtils.getRepresentativeIVForSD] Could not determine representative IV for SD bands, using default:", defaultIV);
-    return defaultIV;
-};
-
-
-export const generateFreshPayoffChartData = ({
+// --- Main Payoff Graph Data Generator ---
+export function generatePayoffGraphData({
   strategyLegs,
   niftyTargetString,
   displaySpotForSlider,
   targetDateISO,
   riskFreeRate,
-  getScenarioIV,      // Function: (legToken) => decimal IV (e.g., 0.25)
-  getOptionByToken,   // Function: (legToken) => { expiry: string, strike: number, iv: number (percentage e.g. 25.5), lotSize: number, ... }
+  getScenarioIV,
+  getOptionByToken,
+  targetInterval,
+  PAYOFF_GRAPH_POINTS = 40,
+  PAYOFF_GRAPH_INTERVAL_STEP = 100,
   underlyingSpotPrice,
-}) => {
-  console.log("[payoffChartUtils.generateFreshPayoffChartData] INPUTS:", 
-    { legsCount: strategyLegs?.length, niftyTargetString, displaySpotForSlider, targetDateISO, underlyingSpotPrice, riskFreeRate }
-  );
-
+  showPercentage = false,
+  sdDays = 30,
+  fullOptionChainData = [], // Ensure this is an array of option objects
+}) {
   const selectedLegs = strategyLegs.filter(
-    (l) => l.selected && l.token && typeof l.price === 'number' && 
-           typeof l.strike === 'number' && l.optionType && l.expiry &&
-           typeof l.lots === 'number' && typeof l.lotSize === 'number' // Ensure these are present
+    (l) => l.selected && l.token && typeof l.price === "number"
   );
 
-  if (selectedLegs.length === 0) {
-    console.warn("[payoffChartUtils] No valid selected legs with all required properties for chart data generation.");
-    return null;
-  }
+  // Determine the central spot for SD band calculation and P&L grid focus
+  const rawScenarioSpot =
+    niftyTargetString !== "" && !isNaN(parseFloat(niftyTargetString))
+      ? parseFloat(niftyTargetString)
+      : typeof displaySpotForSlider === "number"
+      ? displaySpotForSlider
+      : (typeof displaySpotForSlider === 'string' && !isNaN(parseFloat(displaySpotForSlider)) ? parseFloat(displaySpotForSlider) : undefined);
+
+  const centerForCalculations = !isNaN(rawScenarioSpot) && rawScenarioSpot > 0 
+                                 ? rawScenarioSpot 
+                                 : (typeof underlyingSpotPrice === 'number' && underlyingSpotPrice > 0 ? underlyingSpotPrice : undefined);
   
-  const numericCenterSpot = (niftyTargetString !== "" && !isNaN(parseFloat(niftyTargetString))) 
-                              ? parseFloat(niftyTargetString) 
-                              : (typeof displaySpotForSlider === 'number' && displaySpotForSlider > 0 
-                                ? displaySpotForSlider 
-                                : (typeof underlyingSpotPrice === 'number' && underlyingSpotPrice > 0 ? underlyingSpotPrice : 0));
-
-  if (numericCenterSpot <= 0 || !targetDateISO || isNaN(riskFreeRate)) {
-    console.warn("[payoffChartUtils] Invalid critical inputs. CenterSpot:", numericCenterSpot, "TargetDateISO:", targetDateISO, "RiskFreeRate:", riskFreeRate);
-    return null;
+  if (centerForCalculations === undefined && selectedLegs.length === 0 && (!Array.isArray(fullOptionChainData) || fullOptionChainData.length === 0)) {
+    return { points: [], sdBands: null };
   }
-  
-  let minStrike = Infinity, maxStrike = 0;
-  selectedLegs.forEach(leg => {
-      const strikeNum = Number(leg.strike);
-      minStrike = Math.min(minStrike, strikeNum);
-      maxStrike = Math.max(maxStrike, strikeNum);
-  });
 
-  const strikeRange = (maxStrike > 0 && minStrike !== Infinity && maxStrike > minStrike) ? (maxStrike - minStrike) : 0;
-  const paddingFactor = PAYOFF_CHART_XAXIS_STRIKE_PADDING_FACTOR || 0.30;
-  const defaultPadding = numericCenterSpot * 0.20; // 20% if no strike range
-  const padding = strikeRange > 0 ? strikeRange * paddingFactor : defaultPadding; 
-
-  let lowBound = (minStrike !== Infinity && minStrike > 0 ? minStrike : numericCenterSpot) - padding;
-  let highBound = (maxStrike > 0 ? maxStrike : numericCenterSpot) + padding;
-  const stepSize = SPOT_SLIDER_STEP || 50;
-
-  lowBound = Math.max(1, Math.floor(lowBound / stepSize) * stepSize);
-  highBound = Math.ceil(highBound / stepSize) * stepSize;
-  if (lowBound >= highBound) {
-      lowBound = Math.max(1, numericCenterSpot - stepSize * 10);
-      highBound = numericCenterSpot + stepSize * 10;
-      lowBound = Math.max(1, Math.floor(lowBound / stepSize) * stepSize); 
-      highBound = Math.ceil(highBound / stepSize) * stepSize;
-  }
-  if (lowBound <= 0) lowBound = stepSize; // Ensure lowBound is positive
-
-
-  const labels = [];
-  const pnlOnExpiryLine = [];
-  const pnlOnTargetDateLine = [];
-  const numPoints = PAYOFF_CHART_POINTS || 60;
-
-  for (let i = 0; i <= numPoints; i++) {
-    const underlyingPriceAtTick = parseFloat((lowBound + ((highBound - lowBound) * i) / numPoints).toFixed(2));
-    labels.push(underlyingPriceAtTick.toFixed(0));
-    
-    let totalExpiryPnL = 0;
-    let totalTargetDatePnL = 0;
-
-    selectedLegs.forEach((leg) => {
-      const scenarioIVForLeg = getScenarioIV(leg.token); // Expects decimal IV
-      if (typeof scenarioIVForLeg !== 'number') {
-          console.warn(`[payoffChartUtils] Invalid IV from getScenarioIV for leg ${leg.token}:`, scenarioIVForLeg);
-      }
-
-      totalExpiryPnL += calculateLegPnLAtExpiry(leg, underlyingPriceAtTick);
-      totalTargetDatePnL += calculateLegPnLAtTargetDate(
-        leg, underlyingPriceAtTick, targetDateISO, riskFreeRate,
-        scenarioIVForLeg, // Pass the retrieved scenario IV
-        getOptionByToken
-      );
-    });
-    pnlOnExpiryLine.push(parseFloat(totalExpiryPnL.toFixed(2)));
-    pnlOnTargetDateLine.push(parseFloat(totalTargetDatePnL.toFixed(2)));
-  }
-  
-  let pnlAtCurrentNiftyTarget = 0;
-  selectedLegs.forEach((leg) => {
-      pnlAtCurrentNiftyTarget += calculateLegPnLAtTargetDate(
-          leg, numericCenterSpot, targetDateISO, riskFreeRate,
-          getScenarioIV(leg.token), getOptionByToken
-      );
-  });
-  pnlAtCurrentNiftyTarget = parseFloat(pnlAtCurrentNiftyTarget.toFixed(2));
-  let sdLevels = null;
-  const liveSpotForSDBands = typeof underlyingSpotPrice === 'number' && underlyingSpotPrice > 0 ? underlyingSpotPrice : numericCenterSpot;
-
-  if (liveSpotForSDBands > 0 && targetDateISO && timeToExpiryDays) {
-    const representativeIV = getRepresentativeIVForSD(selectedLegs, liveSpotForSDBands, getOptionByToken); 
-    const today = new Date();
-    const dteForSDbands = timeToExpiryDays(targetDateISO, today);
-          sdLevels = {
-        plusOneSD: 56000,
-        minusOneSD: 54000,
-        plusTwoSD: 57000,
-        minusTwoSD: 53000,
-      };
-    if (representativeIV > 0 && dteForSDbands > 0) {
-      const timeFactor = Math.sqrt(dteForSDbands / 365);
-      const oneSdMove = liveSpotForSDBands * representativeIV * timeFactor;
-      sdLevels = {
-        plusOneSD: parseFloat((liveSpotForSDBands + oneSdMove).toFixed(2)),
-        minusOneSD: parseFloat((liveSpotForSDBands - oneSdMove).toFixed(2)),
-        plusTwoSD: parseFloat((liveSpotForSDBands + (2 * oneSdMove)).toFixed(2)),
-        minusTwoSD: parseFloat((liveSpotForSDBands - (2 * oneSdMove)).toFixed(2)),
-      };
-    } else {
-        console.warn("[payoffChartUtils] SD bands not calculated. RepIV:", representativeIV, "DTE for SD:", dteForSDbands);
+  // 1. Calculate SD bands (based on centerForCalculations)
+  let sdBands = null;
+  if (centerForCalculations !== undefined && centerForCalculations > 0 && sdDays > 0) {
+    let representativeIv = 0.15;
+    if (selectedLegs.length > 0) {
+        const atmLeg = selectedLegs.find(
+            (l) => Math.abs(Number(l.strike) - centerForCalculations) === Math.min(...selectedLegs.map((x) => Math.abs(Number(x.strike) - centerForCalculations)))
+        ) || selectedLegs[0];
+        if (atmLeg) {
+            const ivValue = atmLeg.iv || getScenarioIV(atmLeg.token);
+            if (typeof ivValue === 'string' || typeof ivValue === 'number') {
+                const parsedIV = parseFloat(ivValue);
+                if (!isNaN(parsedIV) && parsedIV > 0) representativeIv = parsedIV / 100;
+            }
+        }
+    } else if (Array.isArray(fullOptionChainData) && fullOptionChainData.length > 0) {
+        const atmOptionFromChain = fullOptionChainData
+            .filter(opt => opt && opt.iv && (typeof opt.iv === 'string' || typeof opt.iv === 'number') && parseFloat(opt.iv) > 0)
+            .reduce((prev, curr) => {
+                if (!prev) return curr;
+                return Math.abs(parseFloat(curr.strike) - centerForCalculations) < Math.abs(parseFloat(prev.strike) - centerForCalculations) ? curr : prev;
+            }, null);
+        if (atmOptionFromChain && atmOptionFromChain.iv) {
+            const parsedIV = parseFloat(atmOptionFromChain.iv);
+            if(!isNaN(parsedIV) && parsedIV > 0) representativeIv = parsedIV / 100;
+        }
+    }
+    if (representativeIv > 0) {
+        const timeToExpiryForSD = sdDays / 365;
+        if (timeToExpiryForSD > 0) {
+            const sd = centerForCalculations * representativeIv * Math.sqrt(timeToExpiryForSD);
+            sdBands = {
+                minus2SD: Number((centerForCalculations - 2 * sd).toFixed(2)),
+                minus1SD: Number((centerForCalculations - sd).toFixed(2)),
+                plus1SD:  Number((centerForCalculations + sd).toFixed(2)),
+                plus2SD:  Number((centerForCalculations + 2 * sd).toFixed(2)),
+                center: Number(centerForCalculations.toFixed(2))
+            };
+        }
     }
   }
-  
-  const targetDateLabel = targetDateISO ? new Date(targetDateISO).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "Target Date";
 
-  const chartData = {
-    labels,
-    datasets: [
-      { 
-        label: "P&L on Expiry", data: pnlOnExpiryLine, 
-        borderColor: "rgb(220, 53, 69)", borderWidth: 2, tension: 0, pointRadius: 0,
-        segment: { borderColor: ctx => (ctx.p0.parsed.y < 0 && ctx.p1.parsed.y < 0) ? 'rgb(220, 53, 69)' : ((ctx.p0.parsed.y > 0 && ctx.p1.parsed.y > 0) ? 'rgb(25, 135, 84)' : 'rgb(108, 117, 125)')}
-      },
-      { 
-        label: `P&L on ${targetDateLabel}`, data: pnlOnTargetDateLine, 
-        borderColor: "rgb(13, 110, 253)", borderWidth: 2, tension: 0.1, pointRadius: 0, borderDash: [5, 5]
-      },
-    ],
-    minX: lowBound,
-    maxX: highBound,
-    pnlAtCurrentTarget: pnlAtCurrentNiftyTarget,
-    currentActualSpot: typeof underlyingSpotPrice === 'number' && underlyingSpotPrice > 0 ? parseFloat(underlyingSpotPrice.toFixed(2)) : null,
-    sdLevels: sdLevels,
-  };
-  console.log("[payoffChartUtils.generateFreshPayoffChartData] FINAL OUTPUT:", JSON.parse(JSON.stringify(chartData)));
-  return chartData;
-};
+  // 2. Generate P&L Spot Grid (your original logic)
+  let pnlSpotGrid = [];
+  if (centerForCalculations !== undefined) {
+    const intervalStep = Number(targetInterval) || PAYOFF_GRAPH_INTERVAL_STEP || 100;
+    const actualIntervalStep = intervalStep === 0 ? 100 : intervalStep;
+    const snappedSpot = snapToInterval(centerForCalculations, actualIntervalStep);
+    const halfPoints = Math.floor(PAYOFF_GRAPH_POINTS / 2);
+    for (let i = -halfPoints; i <= halfPoints; i++) {
+      let spotVal;
+      if (i === 0) {
+        spotVal = centerForCalculations;
+      } else {
+        spotVal = snappedSpot + i * actualIntervalStep;
+        if (spotVal === centerForCalculations && i!==0) continue;
+      }
+      if (spotVal < 0.01) continue;
+      const roundedSpot = Number(spotVal.toFixed(2));
+      if(!pnlSpotGrid.includes(roundedSpot)) pnlSpotGrid.push(roundedSpot);
+    }
+    if (!pnlSpotGrid.includes(Number(centerForCalculations.toFixed(2)))) {
+        pnlSpotGrid.push(Number(centerForCalculations.toFixed(2)));
+    }
+  }
+
+  // 3. Generate OI Spot Grid (unique strikes from fullOptionChainData within ±2SD)
+  let oiSpotGrid = [];
+  if (Array.isArray(fullOptionChainData) && fullOptionChainData.length > 0 && sdBands) {
+    oiSpotGrid = Array.from(
+      new Set(
+        fullOptionChainData
+          .map(opt => opt && typeof opt.strike !== 'undefined' ? parseFloat(opt.strike) : null)
+          .filter(strikeNum => 
+            strikeNum !== null && 
+            !isNaN(strikeNum) &&
+            strikeNum >= sdBands.minus2SD && 
+            strikeNum <= sdBands.plus2SD
+          )
+      )
+    ).map(s => Number(s.toFixed(2))); // Ensure consistent formatting
+  }
+
+  // 4. Merge and sort all unique spot points for the final chart x-axis
+  const finalSpotGrid = Array.from(new Set([...pnlSpotGrid, ...oiSpotGrid])).sort((a, b) => a - b);
+
+  if (finalSpotGrid.length === 0 && selectedLegs.length === 0) {
+    return { points: [], sdBands };
+  }
+   if (finalSpotGrid.length === 0 && selectedLegs.length > 0) {
+      console.warn("Final spot grid is empty, but strategy legs exist. P&L cannot be plotted on a range.");
+      return { points: [], sdBands }; // Or handle by plotting P&L at leg strikes only
+   }
+
+
+  // 5. Calculate P&L and OI for each point in the finalSpotGrid
+  const points = finalSpotGrid.map((spot) => {
+    let pnlAtExpiry = 0;
+    let pnlAtTargetDate = 0;
+    if (selectedLegs.length > 0) {
+        selectedLegs.forEach((leg) => {
+        pnlAtExpiry += calculateLegPnLAtExpiry(leg, spot);
+        pnlAtTargetDate += calculateLegPnLAtTargetDate(
+            leg, spot, targetDateISO, riskFreeRate, getScenarioIV(leg.token), getOptionByToken
+        );
+        });
+    }
+
+    let callOI = 0, putOI = 0;
+    // Check if this 'spot' is one of the strikes from oiSpotGrid (i.e., an actual option strike within ±2SD)
+    if (Array.isArray(fullOptionChainData) && fullOptionChainData.length > 0 && sdBands && 
+        spot >= sdBands.minus2SD && spot <= sdBands.plus2SD) { // Double check range condition
+        
+      // Find matching options in the full chain for this specific spot
+      const callOption = fullOptionChainData.find(
+        (option) =>
+          option && option.optionType === "CE" &&
+          Math.abs(parseFloat(option.strike) - spot) < 0.001 && // Robust comparison
+          option.marketData && typeof option.marketData.oi === "number"
+      );
+      if (callOption) callOI = callOption.marketData.oi;
+
+      const putOption = fullOptionChainData.find(
+        (option) =>
+          option && option.optionType === "PE" &&
+          Math.abs(parseFloat(option.strike) - spot) < 0.001 && // Robust comparison
+          option.marketData && typeof option.marketData.oi === "number"
+      );
+      if (putOption) putOI = putOption.marketData.oi;
+    }
+
+    let pnlAtExpiryPct, pnlAtTargetDatePct;
+    if (showPercentage && typeof underlyingSpotPrice === 'number' && underlyingSpotPrice !== 0) {
+      pnlAtExpiryPct = (pnlAtExpiry / underlyingSpotPrice) * 100;
+      pnlAtTargetDatePct = (pnlAtTargetDate / underlyingSpotPrice) * 100;
+    }
+
+    return {
+      spot,
+      pnlAtExpiry: Number(pnlAtExpiry.toFixed(2)),
+      pnlAtTargetDate: Number(pnlAtTargetDate.toFixed(2)),
+      pnlAtExpiryPct: pnlAtExpiryPct !== undefined ? Number(pnlAtExpiryPct.toFixed(2)) : undefined,
+      pnlAtTargetDatePct: pnlAtTargetDatePct !== undefined ? Number(pnlAtTargetDatePct.toFixed(2)) : undefined,
+      callOI,
+      putOI,
+      isCurrentSpot: centerForCalculations !== undefined ? spot === Number(centerForCalculations.toFixed(2)) : false,
+    };
+  });
+
+  return { points, sdBands };
+}

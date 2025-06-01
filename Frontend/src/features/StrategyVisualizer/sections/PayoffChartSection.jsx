@@ -23,15 +23,10 @@ import Select from "../../../components/Select/Select"; // For interval dropdown
 // --- Your existing imports ---
 import { usePayoffChartControls } from "../../../hooks/usePayoffChartControls";
 import { SPOT_SLIDER_STEP, PAYOFF_TABLE_INTERVAL_STEP } from "../../../config";
-import {
-  calculateProjectedStrategyData,
-  calculateDynamicPayoffData, // For the chart (currently might be blank, but logic is preserved)
-} from "../../utils/payoffDataCalculator";
-import { formatDisplayValue, NOT_APPLICABLE } from "../../utils/formatters"; // Assuming this is used by PayoffTable or PnLTable
-
+import { calculateProjectedStrategyData } from "../../utils/payoffDataCalculator";
+import { NOT_APPLICABLE } from "../../utils/formatters"; // Assuming this is used by PayoffTable or PnLTable
+import PayoffChart from "../components/PayoffChart";
 import "./PayoffChartSection.scss";
-
-Chart.register(...registerables); // As in your file
 
 // IDs for the sub-tabs within "Payoff Graph" main tab
 const SUB_TAB_CHART_VIEW = "subTabChartView"; // For the (potentially blank) chart
@@ -56,17 +51,10 @@ const PayoffChartSection = ({
   onMultiplyByNumLotsChange,
   getScenarioIV,
   underlyingSpotPrice,
+  handleSdDaysChange,
+  sdDays,
+   multiplier = 1, // Assuming multiplier is passed for scaling
 }) => {
-  // console.log("[PayoffChartSection] Props Received:", {
-  //   activeChartTab,
-  //   niftyTarget,
-  //   targetDate,
-  //   legsCount: strategyLegs?.length,
-  // });
-
-  const chartInstanceRef = useRef(null);
-  const canvasRef = useRef(null); // For the chart canvas
-
   // State for the active sub-tab under "Payoff Graph"
   const [activePayoffGraphSubTab, setActivePayoffGraphSubTab] = useState(
     SUB_TAB_PAYOFF_TABLE_VIEW
@@ -97,7 +85,7 @@ const PayoffChartSection = ({
     onTargetDateChange
   );
 
-  // Your original main tabs definition from paste.txt
+  // Your original main tabs d efinition from paste.txt
   const mainChartTabsDefinition = useMemo(
     () => [
       { id: "payoffgraph", label: "Payoff Graph" }, // This will host sub-tabs
@@ -142,33 +130,6 @@ const PayoffChartSection = ({
       multiplyByNumLots,
     ]
   );
-
-  // Data for the chart canvas (sub-tab "Payoff Graph") (UNCHANGED from your paste.txt)
-  // This might still result in a blank chart, but the logic is preserved as requested.
-  const chartDisplayData = useMemo(() => {
-    // console.log(
-    //   "[PayoffChartSection] HOOK: (Original) Recalculating chartDisplayData (for chart sub-tab)."
-    // );
-    return calculateDynamicPayoffData({
-      // Your original function
-      strategyLegs,
-      niftyTarget, // Passed as is from props
-      displaySpotForSlider,
-      targetDate, // Passed as is from props
-      riskFreeRate,
-      getScenarioIV,
-      // Ensure all props needed by *your* calculateDynamicPayoffData are here
-      // getOptionByToken, underlyingSpotPrice (if your version uses them)
-    });
-  }, [
-    strategyLegs,
-    niftyTarget,
-    displaySpotForSlider,
-    targetDate,
-    riskFreeRate,
-    getScenarioIV /*, getOptionByToken, underlyingSpotPrice - add if needed */,
-  ]);
-
   // Data for the NEW "Payoff Table" (P&L Matrix) sub-tab
   const payoffMatrixData = useMemo(() => {
     // console.log(
@@ -214,7 +175,7 @@ const PayoffChartSection = ({
     underlyingSpotPrice,
     showPercentageInMatrix,
   ]);
-//  console.log(payoffMatrixData);
+  //  console.log(payoffMatrixData);
   const niftyTargetInputValue =
     niftyTarget !== "" && !isNaN(parseFloat(niftyTarget))
       ? parseFloat(niftyTarget).toFixed(2)
@@ -226,122 +187,8 @@ const PayoffChartSection = ({
       ? displaySpotForSlider
       : spotSliderMin;
 
-  // Your original chart drawing useEffect (UNCHANGED, will use `chartDisplayData`)
-  // This will only attempt to draw if the "Payoff Graph" SUB-TAB is active.
-  useEffect(() => {
-    // console.log(
-    //   "[PayoffChartSection] EFFECT: Chart useEffect. ActiveTab:",
-    //   activeChartTab,
-    //   "SubTab:",
-    //   activePayoffGraphSubTab,
-    //   "CanvasRef:",
-    //   !!canvasRef.current
-    // );
-
-    if (
-      activeChartTab === "payoffgraph" &&
-      activePayoffGraphSubTab === SUB_TAB_CHART_VIEW && // Only if chart sub-tab is active
-      canvasRef.current &&
-      chartDisplayData && // Use your original chartDisplayData
-      window.Chart
-    ) {
-      console.log(
-        "[PayoffChartSection] EFFECT: Conditions MET for drawing chart (using original data)."
-      );
-      if (chartInstanceRef.current) {
-        chartInstanceRef.current.destroy();
-        chartInstanceRef.current = null;
-      }
-      const ctx = canvasRef.current.getContext("2d");
-      if (!ctx) {
-        console.error("Failed to get canvas context for chart.");
-        return;
-      }
-
-      // Basic validation for your original chartDisplayData
-      if (
-        !chartDisplayData.labels ||
-        !chartDisplayData.datasets ||
-        chartDisplayData.datasets.some((ds) => !ds.data)
-      ) {
-        console.warn(
-          "[PayoffChartSection] Original chartDisplayData is incomplete. Chart may be blank."
-        );
-        // Optionally clear canvas or show a message for the chart sub-tab
-        if (ctx && canvasRef.current) {
-          ctx.clearRect(
-            0,
-            0,
-            canvasRef.current.width,
-            canvasRef.current.height
-          );
-          ctx.font = "14px Arial";
-          ctx.fillStyle = "grey";
-          ctx.textAlign = "center";
-          ctx.fillText(
-            "Chart data is incomplete.",
-            canvasRef.current.width / 2,
-            canvasRef.current.height / 2
-          );
-        }
-        return;
-      }
-
-      try {
-        chartInstanceRef.current = new window.Chart(ctx, {
-          type: "line",
-          data: chartDisplayData, // Your original data
-          options: {
-            // Your original options from paste.txt or simplified
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 0 },
-            interaction: { mode: "index", intersect: false },
-            plugins: { legend: { position: "bottom" } },
-            scales: {
-              y: { title: { display: true, text: "Profit / Loss" } },
-              x: {
-                title: {
-                  display: true,
-                  text: `${currentUnderlying || "Asset"} Price`,
-                },
-                // If your original chartDisplayData provides min/max, use them:
-                // min: chartDisplayData.minX,
-                // max: chartDisplayData.maxX,
-              },
-            },
-          },
-        });
-        // console.log(
-        //   "[PayoffChartSection] EFFECT: Chart instance created/updated (original logic)."
-        // );
-      } catch (error) {
-        console.error(
-          "[PayoffChartSection] EFFECT: Error creating original chart instance:",
-          error
-        );
-      }
-    } else if (chartInstanceRef.current) {
-      // console.log(
-      //   "[PayoffChartSection] EFFECT: Not on chart view or data missing, destroying chart instance."
-      // );
-      chartInstanceRef.current.destroy();
-      chartInstanceRef.current = null;
-    }
-    return () => {
-      if (chartInstanceRef.current) {
-        chartInstanceRef.current.destroy();
-      }
-    };
-  }, [
-    chartDisplayData,
-    activeChartTab,
-    activePayoffGraphSubTab,
-    currentUnderlying,
-  ]); // Added activePayoffGraphSubTab
-
   const handleMainTabChangeWithLog = (tabId) => {
-   // console.log("[PayoffChartSection] Main tab changed to:", tabId);
+    // console.log("[PayoffChartSection] Main tab changed to:", tabId);
     if (activeChartTab === "payoffgraph" && tabId !== "payoffgraph") {
       setActivePayoffGraphSubTab(SUB_TAB_CHART_VIEW); // Reset sub-tab to chart when leaving main graph tab
     }
@@ -353,6 +200,18 @@ const PayoffChartSection = ({
     setActivePayoffGraphSubTab(tabId);
   };
 
+const handleIncrement = () => {
+  if (sdDays < 365) {
+    handleSdDaysChange(sdDays + 1);
+  }
+};
+
+const handleDecrement = () => {
+  if (sdDays > 0) {
+    handleSdDaysChange(sdDays - 1);
+  }
+};
+
   const resetChartZoom = useCallback(() => {
     /* Your original reset logic if any */
   }, []); // Assuming you might add this later
@@ -362,40 +221,13 @@ const PayoffChartSection = ({
       { value: "25", label: "25" },
       { value: "50", label: "50" },
       { value: "100", label: "100" },
+      { value: "200", label: "200" },
       { value: "250", label: "250" },
+      { value: "500", label: "500" },
+      { value: "1000", label: "1000" },
     ],
     []
   );
-
-  const projectedPnlAtTargetLabel = useMemo(() => {
-    // This uses chartDisplayData which is your original calculation.
-    // If chartDisplayData is not the full object, pnlAtCurrentTarget might be undefined.
-    if (
-      chartDisplayData &&
-      typeof chartDisplayData.pnlAtCurrentTarget === "number"
-    ) {
-      const pnl = chartDisplayData.pnlAtCurrentTarget;
-      if (pnl === 0 && (niftyTarget === "" || niftyTarget == null)) return "";
-      const prefixText = pnl >= 0 ? "Projected profit: " : "Projected loss: ";
-      return (
-        prefixText +
-        formatDisplayValue(pnl, "currency_pnl", {
-          prefix: "₹",
-          showSign: true,
-          useAbsolute: pnl < 0,
-          digits: 2,
-        })
-      );
-    }
-    return ""; // Return empty if pnlAtCurrentTarget is not available from your chartDisplayData
-  }, [chartDisplayData, niftyTarget]);
-
-  // console.log(
-  //   "[PayoffChartSection] RENDERING. MainTab:",
-  //   activeChartTab,
-  //   "SubTab:",
-  //   activeChartTab === "payoffgraph" ? activePayoffGraphSubTab : "N/A"
-  // );
 
   return (
     <section className="sv-payoff-chart-section">
@@ -445,44 +277,82 @@ const PayoffChartSection = ({
               {/* Placeholder for Chart-specific controls if "Payoff Graph" SUB-TAB is active */}
               {activePayoffGraphSubTab === SUB_TAB_CHART_VIEW && (
                 <div className="chart-specific-controls">
-                  {/* <Button onClick={resetChartZoom} variant="outline" size="small">Reset Zoom</Button> */}
-                  {/* Add SD Fixed / OI Strikes dropdowns here if they belong to the chart view */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                      overflow: "hidden",
+                      width: "fit-content",
+                    }}
+                  >
+                    <button
+                      onClick={handleDecrement}
+                      style={{
+                        border: "none",
+                        background: "#f8f9fa",
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        fontSize: "16px",
+                        color: "#666",
+                      }}
+                    >
+                      −
+                    </button>
+
+                    <input
+                      type="number"
+                      value={sdDays}
+                      onChange={(e)=>{handleSdDaysChange(Number(e.target.value))}}
+                      style={{
+                        border: "none",
+                        padding: "8px 16px",
+                        textAlign: "center",
+                        fontSize: "14px",
+                        minWidth: "80px",
+                        outline: "none",
+                        background: "white",
+                      }}
+                    />
+
+                    <button
+                      onClick={handleIncrement}
+                      style={{
+                        border: "none",
+                        background: "#f8f9fa",
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        fontSize: "16px",
+                        color: "#666",
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Content for "Payoff Graph" SUB-TAB (Your original chart canvas) */}
             {activePayoffGraphSubTab === SUB_TAB_CHART_VIEW && (
-              <div className="payoff-graph-content">
-                {" "}
-                {/* Your original class */}
-                <div className="chart-display-area">
-                  <canvas
-                    ref={canvasRef}
-                    id="payoffChartCanvas"
-                    style={{ minHeight: "350px", maxHeight: "500px" }}
-                  ></canvas>
-                  {projectedPnlAtTargetLabel && (
-                    <div className="projected-pnl-label">
-                      {projectedPnlAtTargetLabel}
-                    </div>
-                  )}
-                  {/* Your original loading placeholders */}
-                  {(!chartDisplayData ||
-                    !chartDisplayData.labels ||
-                    !chartDisplayData.datasets) && // Simplified check for basic structure
-                    strategyLegs.filter((l) => l.selected).length > 0 && (
-                      <div className="chart-loading-placeholder">
-                        Calculating Chart Data...
-                      </div>
-                    )}
-                  {strategyLegs.filter((l) => l.selected).length === 0 && (
-                    <div className="chart-loading-placeholder">
-                      Add or select strategy legs to see payoff.
-                    </div>
-                  )}
-                </div>
-              </div>
+              <>
+                <PayoffChart
+                  strategyLegs={strategyLegs}
+                  niftyTargetString={niftyTarget}
+                  targetDateISO={targetDate}
+                  getOptionByToken={getOptionByToken}
+                  riskFreeRate={riskFreeRate}
+                  getScenarioIV={getScenarioIV}
+                  underlyingSpotPrice={underlyingSpotPrice}
+                  targetInterval={matrixTableInterval} // Assuming this is the interval for the chart
+                  displaySpotForSlider={displaySpotForSlider}
+                  showPercentage={showPercentageInMatrix} // Pass this prop if needed
+                  sdDays={sdDays} // Pass sdDays for SD bands
+                  fullOptionChainData={liveOptionChainMap}
+                  multiplier={multiplier} // Pass multiplier prop if needed
+                ></PayoffChart>
+              </>
             )}
 
             {/* Content for "Payoff Table" (P&L Matrix) SUB-TAB */}
@@ -493,6 +363,7 @@ const PayoffChartSection = ({
                 // Pass any other props your PayoffTable component might need:
                 // underlyingSpotPrice={underlyingSpotPrice}
                 // showPercentage={showPercentageInMatrix}
+                multiplier={multiplier} // Pass multiplier prop if needed
               />
             )}
           </div>
@@ -520,6 +391,7 @@ const PayoffChartSection = ({
             <PnLTable // Your original component
               projectedLegsData={singleScenarioPerLegData.legs} // Using your original data variable
               totals={singleScenarioPerLegData.totals}
+              multiplier={multiplier} // Pass multiplier prop if needed
             />
           </>
         )}
@@ -548,6 +420,7 @@ const PayoffChartSection = ({
             <GreeksTable // Your original component
               projectedLegsData={singleScenarioPerLegData.legs} // Using your original data variable
               totals={singleScenarioPerLegData.totals}
+              multiplier={multiplier} // Pass multiplier prop if needed
             />
           </div>
         )}

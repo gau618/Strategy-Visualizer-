@@ -20,7 +20,9 @@ const useOptionChainWebSocket = () => {
     const [optionChainMap, setOptionChainMap] = useState(new Map());
     const [readyState, setReadyState] = useState(SocketIOReadyState.CONNECTING);
     const socketRef = useRef(null);
- //   console.log(optionChainMap)
+   console.log()
+
+
     useEffect(() => {
         console.log('[Socket.IO Hook] Initializing connection to:', SOCKET_IO_SERVER_URL);
         setReadyState(SocketIOReadyState.CONNECTING);

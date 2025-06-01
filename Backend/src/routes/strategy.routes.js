@@ -6,6 +6,7 @@ import {
     // updateStrategy, // If you implement update
     // deleteStrategy  // If you implement delete
 } from '../controllers/strategy.controller.js';
+import fetchHistoricalData from '../controllers/historicalDataController.js'; // Import the historical data controller
 
 // import { verifyJWT } from '../middlewares/auth.middleware.js'; // If you had auth ready
 
@@ -14,14 +15,7 @@ const router = Router();
 // If you had authentication, you'd apply it here:
 // router.use(verifyJWT); 
 
-router.route('/')
-    .post(createStrategy)  // For "Trade All" and "Add to Draft"
-    .get(getStrategies);   // For fetching Positions, My Strategies, Drafts (filtered by status)
-
-// Example for specific ID operations (if needed for update/delete later)
-// router.route('/:strategyId')
-//     .get(getStrategyById) // You'd need a getStrategyById controller
-//     .put(updateStrategy)
-//     .delete(deleteStrategy);
+router.route('/').post(createStrategy).get(getStrategies);  
+router.route('/historical-data').post(fetchHistoricalData);
 
 export default router;

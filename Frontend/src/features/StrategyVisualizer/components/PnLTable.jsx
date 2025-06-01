@@ -15,7 +15,7 @@ const formatValue = (value, digits = 2, notApplicableString = '-') => {
   return Number(value).toFixed(digits);
 };
 
-const PnLTable = ({ projectedLegsData, totals }) => {
+const PnLTable = ({ projectedLegsData, totals,multiplier }) => {
   if (!projectedLegsData || projectedLegsData.length === 0) {
     return <div className="pnl-table-container no-data-message">Add strategy legs and set target to view P&L.</div>;
   }
@@ -45,19 +45,19 @@ const PnLTable = ({ projectedLegsData, totals }) => {
           {projectedLegsData.map((leg) => (
             <tr key={leg.id}>
               <td>{leg.instrument}</td>
-              <td>{formatValue(leg.projectedPnLPerShare)}</td> {/* Per-share P&L */}
-              <td>{formatValue(leg.projectedOptionPrice)}</td>
-              <td>{formatValue(leg.entryPrice)}</td>
-              <td>{formatValue(leg.ltp)}</td>
+              <td>{formatValue(leg.projectedPnLPerShare*multiplier)}</td> {/* Per-share P&L */}
+              <td>{formatValue(leg.projectedOptionPrice*multiplier)}</td>
+              <td>{formatValue(leg.entryPrice*multiplier)}</td>
+              <td>{formatValue(leg.ltp*multiplier)}</td>
             </tr>
           ))}
           {(projectedLegsData.length > 0 && totals) && (
             <tr className="pnl-total-row">
               <td>Total <span className="projected-label">Projected</span> <span className="info-icon" title="Total P&L based on target spot and date, scaled by lots/lot size if selected.">ⓘ</span></td>
-              <td>{formatValue(totals.projectedPnL)}</td> {/* This total is already scaled */}
-              <td>{formatValue(summedPrices.targetPrice)}</td>
-              <td>{formatValue(summedPrices.entryPrice)}</td>
-              <td>{formatValue(summedPrices.ltp)}</td>
+              <td>{formatValue(totals.projectedPnL*multiplier)}</td> {/* This total is already scaled */}
+              <td>{formatValue(summedPrices.targetPrice*multiplier)}</td>
+              <td>{formatValue(summedPrices.entryPrice*multiplier)}</td>
+              <td>{formatValue(summedPrices.ltp*multiplier)}</td>
             </tr>
           )}
         </tbody>

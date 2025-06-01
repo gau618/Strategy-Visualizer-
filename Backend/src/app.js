@@ -18,7 +18,7 @@ import strategyRouter from './routes/strategy.routes.js';
 
 // Define Routes
 app.use('/api/v1/strategies', strategyRouter);
-// app.use('/api/v1/users', userRouter);
+//app.use('/api/v1/users', userRouter);
 
 // Simple health check route
 app.get('/api/v1/health', (req, res) => {

@@ -9,7 +9,7 @@ const formatGreekValue = (value, digits = 2, notApplicableString = '-') => {
   return Number(value).toFixed(digits);
 };
 
-const GreeksTable = ({ projectedLegsData, totals }) => {
+const GreeksTable = ({ projectedLegsData, totals,multiplier }) => {
   // console.log("GreeksTable received projectedLegsData:", projectedLegsData); // << DEBUG
   // console.log("GreeksTable received totals:", totals); // << DEBUG
 
@@ -39,11 +39,11 @@ const GreeksTable = ({ projectedLegsData, totals }) => {
             return (
               <tr key={leg.id}>
                 <td>{leg.instrument}</td>
-                <td>{formatGreekValue(leg.projectedGreeks.delta * direction, 2)}</td>
-                <td>{formatGreekValue(leg.projectedGreeks.gamma, 4)}</td> {/* Gamma is usually displayed positive for the contract */}
-                <td>{formatGreekValue(leg.projectedGreeks.theta * direction, 2)}</td>
+                <td>{formatGreekValue(leg.projectedGreeks.delta * direction*multiplier, 2)}</td>
+                <td>{formatGreekValue(leg.projectedGreeks.gamma*multiplier, 4)}</td> {/* Gamma is usually displayed positive for the contract */}
+                <td>{formatGreekValue(leg.projectedGreeks.theta * direction*multiplier, 2)}</td>
                 {/* Vega from black76Greeks is raw, scale by /100 for per 1% display */}
-                <td>{formatGreekValue(leg.projectedGreeks.vega ? (leg.projectedGreeks.vega) * direction : null, 2)}</td>
+                <td>{formatGreekValue(leg.projectedGreeks.vega*multiplier*direction ? (leg.projectedGreeks.vega)* direction*multiplier : null, 2)}</td>
               </tr>
             );
           })}
@@ -51,11 +51,11 @@ const GreeksTable = ({ projectedLegsData, totals }) => {
             <tr className="greeks-total-row">
               <td>Total</td>
               {/* Totals are already scaled by multipliers and buy/sell direction in projectedStrategyData */}
-              <td>{formatGreekValue(totals.delta, 2)}</td>
-              <td>{formatGreekValue(totals.gamma, 4)}</td>
-              <td>{formatGreekValue(totals.theta, 2)}</td>
+              <td>{formatGreekValue(totals.delta*multiplier, 2)}</td>
+              <td>{formatGreekValue(totals.gamma*multiplier, 4)}</td>
+              <td>{formatGreekValue(totals.theta*multiplier, 2)}</td>
               {/* Total Vega is also raw, scale by /100 for per 1% display */}
-              <td>{formatGreekValue(totals.vega ? totals.vega  : null, 2)}</td>
+              <td>{formatGreekValue(totals.vega ? totals.vega*multiplier  : null, 2)}</td>
             </tr>
           )}
         </tbody>

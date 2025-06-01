@@ -28,6 +28,8 @@ const DetailedDataSection = ({
   onMultiplyByLotSizeChange,
   multiplyByNumLots,
   onMultiplyByNumLotsChange,
+  sdDays,
+  multiplier=1
 }) => {
   const handleLocalGlobalIvOffsetChange = useCallback(
     (increment) => {
@@ -185,6 +187,7 @@ const DetailedDataSection = ({
   const targetDayFuturesInfo = useMemo(() => {
     const firstLeg = strategyLegs.find((l) => l.selected && l.token);
     const liveOptForSpot = firstLeg ? getOptionByToken(firstLeg.token) : null;
+    console
     const spotPrice = liveOptForSpot?.marketData?.spot
       ? parseFloat(liveOptForSpot.marketData.spot)
       : currentUnderlying === "BANKNIFTY"
@@ -195,7 +198,7 @@ const DetailedDataSection = ({
     const sdVolatility = firstLeg
       ? getScenarioIV(firstLeg.token)
       : DEFAULT_VOLATILITY; // getScenarioIV returns decimal
-    const TTM = 30 / 365.25; // Approx 30 days TTM for SD calc
+    const TTM = sdDays / 365.25;
     const oneSdPoints = spotPrice * sdVolatility * Math.sqrt(TTM);
     const date = new Date();
     date.setDate(date.getDate() + 30);
@@ -349,19 +352,19 @@ const DetailedDataSection = ({
           <tbody>
             <tr>
               <td>Delta</td>
-              <td>{greeksSummary.delta?.toFixed(2) || "-"}</td>
+              <td>{(greeksSummary.delta*multiplier)?.toFixed(2) || "-"}</td>
             </tr>
             <tr>
               <td>Gamma</td>
-              <td>{greeksSummary.gamma?.toFixed(4) || "-"}</td>
+              <td>{(greeksSummary.gamma*multiplier)?.toFixed(4) || "-"}</td>
             </tr>
             <tr>
               <td>Theta</td>
-              <td>{greeksSummary.theta?.toFixed(2) || "-"}</td>
+              <td>{(greeksSummary.theta*multiplier)?.toFixed(2) || "-"}</td>
             </tr>
             <tr>
               <td>Vega</td>
-              <td>{greeksSummary.vega?.toFixed(2) || "-"}</td>
+              <td>{(greeksSummary.vega*multiplier)?.toFixed(2) || "-"}</td>
             </tr>
           </tbody>
         </table>

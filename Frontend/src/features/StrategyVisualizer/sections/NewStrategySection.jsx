@@ -16,6 +16,8 @@ const NewStrategySection = ({
   onSaveStrategy,
   getOptionByToken,
   underlyingSpotPrice,
+  multiplier,
+  setMultiplier,
 }) => {
   const { totalPremium, priceGetNet } = useMemo(() => {
     let premium = 0,
@@ -530,6 +532,7 @@ const NewStrategySection = ({
       underlying: currentUnderlying,
       legs: legsToSaveWithStatus,
       status: actionStatus,
+      multiplier: multiplier || 1,
       name: strategyName,
     };
     onSaveStrategy(payload);
@@ -632,12 +635,15 @@ const NewStrategySection = ({
         )}
       </div>
       <div className="strategy-leg-summary">
-        <span>
-          Multiplier: {firstSelectedLegForSummary?.lotSize || "N/A"}{" "}
-          {firstSelectedLegForSummary
-            ? `(${firstSelectedLegForSummary.expiry})`
-            : ""}
-        </span>
+        <input type="text"
+        value={multiplier}
+        onChange={(e) => {
+          setMultiplier(
+            e.target.value ? parseFloat(e.target.value) : 0
+          );
+        }}
+        >
+        </input>
         <span>
           Net Price:{" "}
           <span className={priceGetNet >= 0 ? "pnl-positive" : "pnl-negative"}>
