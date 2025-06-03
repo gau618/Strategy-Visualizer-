@@ -18,7 +18,7 @@ export default function Text() {
     setHistoricalData(null);
     console.log("Fetching historical data for symboltoken:", symboltoken.trim());
     try {
-      const response = await fetch('http://localhost:5000/api/v1/strategies/historical-data', {
+      const response = await fetch('https://strategy-visualizer.onrender.com/api/v1/strategies/historical-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
