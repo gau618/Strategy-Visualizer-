@@ -4,10 +4,24 @@ import cookieParser from "cookie-parser";
 
 const app=express();
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://strategy-visualizer-rgc3.vercel.app'
+];
+
 app.use(cors({
-     origin: 'http://localhost:5173',  
-    //  credentials: true                
-  }));
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true // if you need to allow cookies/auth
+}));
+
 app.use(express.json({limit:"20kb"}))
 app.use(express.urlencoded({extended:true,limit:"20kb"}))
 app.use(express.static('public'))
