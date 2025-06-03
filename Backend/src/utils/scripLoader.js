@@ -1,14 +1,21 @@
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-export function loadScripData(path = '../../OpenAPIScripMaster.json') {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export function loadScripData(relativePath = '../../OpenAPIScripMaster.json') {
   try {
-    const raw = fs.readFileSync(path, 'utf8');
+    const absolutePath = path.join(__dirname, relativePath);
+    const raw = fs.readFileSync(absolutePath, 'utf8');
     return JSON.parse(raw);
   } catch (error) {
     console.error('❌ Error loading scrip data:', error);
     return [];
   }
 }
+
 
 export function filterOptionChain(scripData) {
   return scripData.filter(scrip =>
