@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-export function loadScripData(path = '../OpenAPIScripMaster.json') {
+export function loadScripData(path = '../../OpenAPIScripMaster.json') {
   try {
     const raw = fs.readFileSync(path, 'utf8');
     return JSON.parse(raw);
