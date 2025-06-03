@@ -20,7 +20,7 @@ const fetchHistoricalData = async (req, res) => {
     const clientLocalIP = process.env.ANGEL_CLIENT_LOCAL_IP;
     const clientPublicIP = process.env.ANGEL_CLIENT_PUBLIC_IP;
     const macAddress = process.env.ANGEL_MAC_ADDRESS;
-    const exchange = process.env.ANGEL_EXCHANGE ||"NFO"; // Default to NSE if not set
+    const exchange = process.env.ANGEL_EXCHANGE ||"NSE"; // Default to NSE if not set
     console.log(apiKey, jwtToken, clientLocalIP, clientPublicIP, macAddress, exchange);
     if (!apiKey || !jwtToken || !clientLocalIP || !clientPublicIP || !macAddress) {
         console.error("Missing one or more Angel One API credentials in .env file.");

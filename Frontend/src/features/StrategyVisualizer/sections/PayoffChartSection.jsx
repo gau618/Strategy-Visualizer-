@@ -53,9 +53,8 @@ const PayoffChartSection = ({
   underlyingSpotPrice,
   handleSdDaysChange,
   sdDays,
-   multiplier = 1, // Assuming multiplier is passed for scaling
+  multiplier = 1, // Assuming multiplier is passed for scaling
 }) => {
-  // State for the active sub-tab under "Payoff Graph"
   const [activePayoffGraphSubTab, setActivePayoffGraphSubTab] = useState(
     SUB_TAB_PAYOFF_TABLE_VIEW
   ); // Default to Payoff Table view for this test
@@ -95,6 +94,16 @@ const PayoffChartSection = ({
     ],
     []
   );
+    const niftyTargetInputValue =
+    niftyTarget !== "" && !isNaN(parseFloat(niftyTarget))
+      ? parseFloat(niftyTarget).toFixed(2)
+      : "";
+  const niftyTargetSliderValue =
+    niftyTarget !== "" && !isNaN(parseFloat(niftyTarget))
+      ? parseFloat(niftyTarget)
+      : displaySpotForSlider > 0
+      ? displaySpotForSlider
+      : spotSliderMin;
 
   // Definition for the sub-tabs within "Payoff Graph"
   const payoffGraphViewSubTabsDefinition = useMemo(
@@ -155,6 +164,7 @@ const PayoffChartSection = ({
         targetInterval: Number(matrixTableInterval),
         underlyingSpotPriceForPercentage: underlyingSpotPrice,
         showPercentage: showPercentageInMatrix,
+        underlyingSpotPrice
       });
     } catch (error) {
       console.error(
@@ -176,16 +186,7 @@ const PayoffChartSection = ({
     showPercentageInMatrix,
   ]);
   //  console.log(payoffMatrixData);
-  const niftyTargetInputValue =
-    niftyTarget !== "" && !isNaN(parseFloat(niftyTarget))
-      ? parseFloat(niftyTarget).toFixed(2)
-      : "";
-  const niftyTargetSliderValue =
-    niftyTarget !== "" && !isNaN(parseFloat(niftyTarget))
-      ? parseFloat(niftyTarget)
-      : displaySpotForSlider > 0
-      ? displaySpotForSlider
-      : spotSliderMin;
+
 
   const handleMainTabChangeWithLog = (tabId) => {
     // console.log("[PayoffChartSection] Main tab changed to:", tabId);

@@ -309,9 +309,10 @@ console.log(sdDays);
   const optionsForCurrentUnderlying = useMemo(() => {
     if (!searchTerm || !getOptionsByUnderlying) return [];
     const options = getOptionsByUnderlying(searchTerm);
+   // console.log(options);
     return options || [];
   }, [searchTerm, getOptionsByUnderlying, liveOptionChainMap]);
-
+ //console.log(strategyLegs)
   if (
     !SocketIOReadyState ||
     websocketReadyState === SocketIOReadyState.CONNECTING ||
@@ -355,7 +356,8 @@ const payoffChartProps = {
     handleSdDaysChange: handleSdDaysChange,
     sdDays, // Pass the SD days for SD bands
     // getScenarioIV is already in commonScenarioProps
-     multiplier
+     multiplier,
+     underlyingSpotPrice
   };
   
 

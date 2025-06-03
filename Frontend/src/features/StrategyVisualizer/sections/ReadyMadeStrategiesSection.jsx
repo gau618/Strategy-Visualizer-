@@ -214,11 +214,11 @@ const ReadyMadeStrategiesSection = ({
         let legLotSize =
           optionData.lotSize ||
           (currentUnderlying.toUpperCase().includes("BANKNIFTY")
-            ? 15
+            ? 35
             : currentUnderlying.toUpperCase().includes("FINNIFTY")
             ? 40
             : currentUnderlying.toUpperCase().includes("NIFTY")
-            ? 50
+            ? 75
             : 1);
         newLegs.push({
           id: `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,

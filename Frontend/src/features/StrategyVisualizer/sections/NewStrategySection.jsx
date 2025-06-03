@@ -185,7 +185,8 @@ const NewStrategySection = ({
               optionDetails.instrumentSymbol ||
               optionDetails.symbol ||
               `${currentUnderlying}${newLeg.expiry}${newLeg.strike}${newLeg.optionType}`;
-            newLeg.lotSize = optionDetails.lotSize || newLeg.lotSize;
+            newLeg.lotSize = optionDetails.contractInfo.lotSize || newLeg.lotSize;
+            console.log(optionDetails)
             newLeg.iv =
               optionDetails.iv !== undefined
                 ? parseFloat(optionDetails.iv)
@@ -313,8 +314,9 @@ const NewStrategySection = ({
                     optionDetails.instrumentSymbol ||
                     optionDetails.symbol ||
                     `${currentUnderlying}${updatedLeg.expiry}${updatedLeg.strike}${updatedLeg.optionType}`;
+                    console.log(optionDetails.lotSize)
                   updatedLeg.lotSize =
-                    optionDetails.lotSize || updatedLeg.lotSize; // Use existing if optionDetails doesn't have it
+                    optionDetails.contractInfo.lotSize || updatedLeg.lotSize; // Use existing if optionDetails doesn't have it
 
                   // For NEW legs, update price/IV from optionDetails UNLESS the user was MANUALLY editing price/IV.
                   if (

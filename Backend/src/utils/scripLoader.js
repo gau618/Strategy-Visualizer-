@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-export function loadScripData(path = '../OpenAPIScripMaster.json') {
+export function loadScripData(path = '../../OpenAPIScripMaster.json') {
   try {
     const raw = fs.readFileSync(path, 'utf8');
     return JSON.parse(raw);
@@ -56,6 +56,7 @@ export function buildTokenMetaMap(optionChain) {
       expiry: scrip.expiry,
       strike: parseInt(scrip.strike/100),
       optionType: extractOptionType(scrip.symbol),
+      instrumenttype: scrip.instrumenttype,
       lotSize: parseInt(scrip.lotsize),
       tickSize: parseFloat(scrip.tick_size)
     };

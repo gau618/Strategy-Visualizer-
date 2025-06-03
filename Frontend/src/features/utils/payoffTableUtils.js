@@ -98,6 +98,7 @@ export const generatePayoffTableData = ({
   PAYOFF_TABLE_INTERVAL_STEP = 50,
   underlyingSpotPriceForPercentage,
   showPercentage,
+  niftyTargetSliderValue
 }) => {
   // Filter valid, selected legs
   const selectedLegs = strategyLegs.filter(
