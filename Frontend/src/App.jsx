@@ -13,8 +13,7 @@ function App() {
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
           <h1>TradVed Strategy Visualizer</h1>
           <Routes>
-            <Route path="/" element={<Text />} />
-            <Route path="/visualizer" element={<StrategyVisualizer />} />
+            <Route path="/" element={<StrategyVisualizer />} />
           </Routes>
         </div>
       </Router>
