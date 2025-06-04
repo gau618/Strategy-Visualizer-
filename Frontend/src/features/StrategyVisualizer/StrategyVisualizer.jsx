@@ -11,6 +11,8 @@ import DetailedDataSection from "./sections/DetailedDataSection";
 import { useLiveOptionData } from "../../contexts/LiveOptionDataContext";
 import { RISK_FREE_RATE, DEFAULT_VOLATILITY } from "../../config";
 import { fetchStrategies, saveStrategy } from "../../services/strategyService";
+import { generatePayoffGraphData } from "../utils/payoffChartUtils";      
+import { PAYOFF_GRAPH_POINTS, PAYOFF_GRAPH_INTERVAL_STEP } from "../../config";
 
 const HARDCODED_USER_ID = "userTest01";
 
@@ -330,6 +332,57 @@ console.log(sdDays);
       </div>
     );
   }
+  let optionChainArray = [];
+  if (liveOptionChainMap instanceof Map) {
+    optionChainArray = Array.from(liveOptionChainMap.values());
+  } else if (Array.isArray(liveOptionChainMap)) {
+    optionChainArray = liveOptionChainMap;
+    if (optionChainArray.length > 0) {
+      const firstElement = optionChainArray[0];
+      if (
+        Array.isArray(firstElement) &&
+        firstElement.length === 2 &&
+        firstElement[1] &&
+        typeof firstElement[1] === "object" &&
+        "strike" in firstElement[1]
+      ) {
+        optionChainArray = optionChainArray.map((entry) => entry[1]);
+      } else if (
+        !(
+          typeof firstElement === "object" &&
+          firstElement !== null &&
+          "strike" in firstElement
+        )
+      ) {
+        console.warn(
+          "PayoffChart: liveOptionChainMap is an array, but elements don't look like option objects."
+        );
+        optionChainArray = []; // Clear if format is wrong
+      }
+    }
+  } else if (liveOptionChainMap) {
+    console.warn(
+      "PayoffChart: liveOptionChainMap received is neither a Map nor an Array. OI data will be missing.",
+      typeof liveOptionChainMap
+    );
+  }
+
+   const payoffGraphData = generatePayoffGraphData({
+      strategyLegs,
+      niftyTarget: niftyTarget.toString(),
+      displaySpotForSlider: underlyingSpotPrice,
+      targetDateISO: targetDate,
+      riskFreeRate: RISK_FREE_RATE,
+      getScenarioIV,
+      getOptionByToken,
+      targetInterval:50,
+      PAYOFF_GRAPH_POINTS,
+      PAYOFF_GRAPH_INTERVAL_STEP,
+      underlyingSpotPrice, // Pass the actual market spot if needed for specific P&L % base elsewhere
+      showPercentage:true,
+      sdDays,
+      liveOptionChainMap: optionChainArray,
+    });
 
   const commonScenarioProps = {
     strategyLegs,
@@ -425,6 +478,7 @@ const payoffChartProps = {
         {...commonScenarioProps}
         projectedNiftyTarget={niftyTarget}
         projectedTargetDate={targetDate}
+        payoffGraphData={payoffGraphData}
       />
       <DetailedDataSection {...detailedDataProps} />
     </div>
