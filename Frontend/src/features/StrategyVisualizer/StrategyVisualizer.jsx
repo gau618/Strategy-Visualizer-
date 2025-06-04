@@ -93,7 +93,7 @@ const StrategyVisualizer = () => {
     ) {
     }
   }, [underlyingSpotPrice, isNiftyTargetManuallySet, niftyTarget]);
-console.log(sdDays);
+//console.log(sdDays);
   // useEffect(() => {
   //   const loadActivePositionsForBuilder = async () => {
   //     if (searchTerm && HARDCODED_USER_ID) {
@@ -458,7 +458,7 @@ const payoffChartProps = {
     multiplier,
     setMultiplier,
   };
-  console.log(multiplier);
+  //console.log(multiplier);
   return (
     <div className="strategy-visualizer-container">
       <HeaderSection />
@@ -479,6 +479,7 @@ const payoffChartProps = {
         projectedNiftyTarget={niftyTarget}
         projectedTargetDate={targetDate}
         payoffGraphData={payoffGraphData}
+       underlyingSpotPrice={underlyingSpotPrice}
       />
       <DetailedDataSection {...detailedDataProps} />
     </div>

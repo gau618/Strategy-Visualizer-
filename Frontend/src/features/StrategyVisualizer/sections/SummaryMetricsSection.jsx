@@ -56,16 +56,16 @@ const SummaryMetricsSection = ({
     const breakevens = [];
 
     // A. Calculate Intrinsic & Time Value
-    if (typeof underlyingSpotPrice === 'number' && selectedLegs.length > 0) {
+    if (selectedLegs.length > 0) {
+    
       selectedLegs.forEach(leg => {
         const intrinsic = leg.optionType === 'CE' 
-          ? Math.max(0, underlyingSpotPrice - leg.strike)
-          : Math.max(0, leg.strike - underlyingSpotPrice);
-        
+          ? Math.max(0, Number(underlyingSpotPrice) - leg.strike)
+          : Math.max(0, leg.strike - Number(underlyingSpotPrice));
+         console.log(underlyingSpotPrice)
         const liveOpt = getOptionByToken?.(leg.token);
         const marketPrice = liveOpt?.lastPrice ?? leg.price;
         const timeVal = marketPrice - intrinsic;
-
         totalIntrinsic += intrinsic * leg.contracts * (leg.buySell === 'Buy' ? 1 : -1);
         totalTimeValue += timeVal * leg.contracts * (leg.buySell === 'Buy' ? 1 : -1);
       });
