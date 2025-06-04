@@ -6,7 +6,7 @@ const app=express();
 
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://strategy-visualizer-rgc3.vercel.app'
+  'https://strategy-visualizer-sigma.vercel.app'
 ];
 
 app.use(cors({
