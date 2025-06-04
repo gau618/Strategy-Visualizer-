@@ -14,3 +14,5 @@ export const PAYOFF_CHART_POINTS = 60;
 export const PAYOFF_TABLE_POINTS = 21; // e.g., 10 above, current, 10 below
 export const PAYOFF_TABLE_INTERVAL_STEP = 50; // Default step for P&L table target prices
 export const PAYOFF_CHART_XAXIS_STRIKE_PADDING_FACTOR = 0.30;
+export const PAYOFF_GRAPH_INTERVAL_STEP=50;
+export const PAYOFF_GRAPH_POINTS = 100; // Number of points in the payoff graph
