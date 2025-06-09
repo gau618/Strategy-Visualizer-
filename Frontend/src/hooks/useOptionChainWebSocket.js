@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
 // Configuration
-const SOCKET_IO_SERVER_URL = 'https://backend-fas4.onrender.com'; // Adjust to your backend URL
+const SOCKET_IO_SERVER_URL = 'https://strategy-visualizer.onrender.com'; // Adjust to your backend URL
 const OPTION_CHAIN_EVENT_NAME = 'option_and_future_Chain'; // Event name from your backend
 
 // Simplified ReadyState for Socket.IO
