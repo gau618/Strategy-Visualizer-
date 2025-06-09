@@ -56,10 +56,10 @@ function transformProcessedDataToSchemaFormat(processedData, currentDataTimestam
         volumeTradedToday: processedData.marketData?.volumeTradedToday || 0,
         iv: (instrumentType === 'Option' && processedData.iv) ? parseFloat(processedData.iv) / 100 : null,
         greeks: (instrumentType === 'Option' && processedData.greeks) ? {
-            delta: processedData.greeks.delta !== undefined ? parseFloat(processedData.greeks.delta) : null,
-            gamma: processedData.greeks.gamma !== undefined ? parseFloat(processedData.greeks.gamma) : null,
-            theta: processedData.greeks.theta !== undefined ? parseFloat(processedData.greeks.theta) : null,
-            vega: processedData.greeks.vega !== undefined ? parseFloat(processedData.greeks.vega) : null,
+            delta: processedData.greeks.delta !== (undefined||null) ? parseFloat(processedData.greeks.delta) : null,
+            gamma: processedData.greeks.gamma !== (undefined||null) ? parseFloat(processedData.greeks.gamma) : null,
+            theta: processedData.greeks.theta !== (undefined||null) ? parseFloat(processedData.greeks.theta) : null,
+            vega: processedData.greeks.vega !== (undefined||null) ? parseFloat(processedData.greeks.vega) : null,
         } : null,
         marketContext: {
             underlyingSpotPrice: processedData.marketData?.spot ? parseFloat(processedData.marketData.spot) : null,

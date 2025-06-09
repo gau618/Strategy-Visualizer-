@@ -4,207 +4,298 @@ import {
   black76Greeks,
   timeToExpiry,
   timeToExpiryDays,
-} from "./optionPricingUtils"; // Corrected relative path
+} from "./optionPricingUtils"; // Existing
 
 import {
-  PAYOFF_CHART_POINTS,
-  PAYOFF_TABLE_POINTS,
-  PAYOFF_TABLE_INTERVAL_STEP,
+  PAYOFF_CHART_POINTS, // Renamed from PAYOFF_GRAPH_POINTS for clarity if this is for chart
+  PAYOFF_TABLE_POINTS, // Keep if different for table utility
+  PAYOFF_TABLE_INTERVAL_STEP, // Keep if different for table utility
   PAYOFF_CHART_XAXIS_STRIKE_PADDING_FACTOR,
-} from "../../config"; // Corrected relative path
+} from "../../config";
 
-// --- Helper Functions (calculateLegValueAtExpiry, calculateLegPnLAtExpiry, calculateLegTheoreticalPrice, calculateLegPnLAtTargetDate, getRepresentativeIVForSD) ---
-// These are the same as in the previous full code response for this file. I'll include them for completeness.
+// --- Helper Functions ---
 
-const calculateLegValueAtExpiry = (leg, underlyingPriceAtExpiry) => {
-  const strike = Number(leg.strike);
-  if (leg.optionType === "CE")
-    return Math.max(0, underlyingPriceAtExpiry - strike);
-  if (leg.optionType === "PE")
-    return Math.max(0, strike - underlyingPriceAtExpiry);
+// MODIFIED: calculateLegValueAtExpiry - handles options and futures (futures have no 'strike'-based intrinsic beyond spot diff)
+const calculateLegValueAtExpiry = (leg, underlyingPriceAtExpiry, instrumentDetails) => {
+  if (leg.legType === 'option') {
+    const strike = Number(instrumentDetails?.strike || leg.strike); // Use details if available
+    if (isNaN(strike) || !leg.optionType) return 0; // Guard against missing option data
+    if (leg.optionType === "CE") return Math.max(0, underlyingPriceAtExpiry - strike);
+    if (leg.optionType === "PE") return Math.max(0, strike - underlyingPriceAtExpiry);
+  } else if (leg.legType === 'future') {
+    // For a future, its "value" at expiry *is* the underlyingPriceAtExpiry.
+    // The P&L comes from (exitPrice - entryPrice).
+    return underlyingPriceAtExpiry;
+  }
   return 0;
 };
-const calculateLegPnLAtExpiry = (leg, underlyingPriceAtExpiry) => {
-  const legValuePerShareAtExpiry = calculateLegValueAtExpiry(
-    leg,
-    underlyingPriceAtExpiry
-  );
+
+// MODIFIED: calculateLegPnLAtExpiry - handles options and futures
+const calculateLegPnLAtExpiry = (leg, underlyingPriceAtExpiry, instrumentDetails) => {
   const entryPricePerShare = parseFloat(leg.price);
-  const multiplier = (leg.lots || 1) * (leg.lotSize || 1);
-  const pnlPerShare = legValuePerShareAtExpiry - entryPricePerShare;
-  return pnlPerShare * multiplier * (leg.buySell === "Buy" ? 1 : -1);
+  if (isNaN(entryPricePerShare)) return 0;
+
+  // MODIFIED: Use leg.lotSize consistently (should be contract multiplier)
+  const contractMultiplier = (Number(leg.lots) || 1) * (Number(leg.lotSize) || 1);
+  const direction = leg.buySell === "Buy" ? 1 : -1;
+
+  if (leg.legType === 'option') {
+    const legValuePerShareAtExpiry = calculateLegValueAtExpiry(leg, underlyingPriceAtExpiry, instrumentDetails);
+    const pnlPerShare = legValuePerShareAtExpiry - entryPricePerShare;
+    return pnlPerShare * contractMultiplier * direction;
+  } else if (leg.legType === 'future') {
+    // P&L for future = (Exit Price - Entry Price) * Multiplier * Direction
+    // Here, Exit Price at expiry is underlyingPriceAtExpiry
+    const pnlPerShare = underlyingPriceAtExpiry - entryPricePerShare;
+    return pnlPerShare * contractMultiplier * direction;
+  }
+  return 0;
 };
+
+// MODIFIED: calculateLegTheoreticalPrice - handles options and futures
 const calculateLegTheoreticalPrice = (
   leg,
-  underlyingPrice,
+  underlyingPrice, // This is the target spot for projection
   targetDateISO,
   riskFreeRate,
-  scenarioIV,
-  getOptionByToken
+  getScenarioIV, // Function to get IV for an option leg
+  getInstrumentByToken // MODIFIED: Use new generic getter
 ) => {
-  const liveOption = getOptionByToken(leg.token);
-  if (!liveOption || !liveOption.expiry) return parseFloat(leg.price);
-  const TTE = timeToExpiry(liveOption.expiry, new Date(targetDateISO));
-  if (TTE <= 0) return calculateLegValueAtExpiry(leg, underlyingPrice);
-  if (scenarioIV <= 0) return calculateLegValueAtExpiry(leg, underlyingPrice);
-  const forwardPrice = underlyingPrice; // Assuming spot is used as F for Black76
-  return black76Price(
-    forwardPrice,
-    Number(leg.strike),
-    TTE,
-    riskFreeRate,
-    scenarioIV,
-    leg.optionType
-  );
+  const instrumentDetails = getInstrumentByToken(leg.token);
+  if (!instrumentDetails) return parseFloat(leg.price); // Fallback if no details
+
+  if (leg.legType === 'option') {
+    if (!instrumentDetails.expiry || !instrumentDetails.strike || !instrumentDetails.optionType || instrumentDetails.legTypeDb !== 'option') {
+        return parseFloat(leg.price); // Fallback for invalid option data
+    }
+    const scenarioIV = getScenarioIV(leg.token); // getScenarioIV should return decimal
+    const TTE = timeToExpiry(instrumentDetails.expiry, new Date(targetDateISO));
+
+    if (TTE <= 0.000001) return calculateLegValueAtExpiry(leg, underlyingPrice, instrumentDetails);
+    if (scenarioIV <= 0.000001) return calculateLegValueAtExpiry(leg, underlyingPrice, instrumentDetails); // Or discounted intrinsic
+
+    // For options, use Black-76. F can be spot or futures price depending on underlying.
+    // Assuming 'underlyingPrice' is the spot and needs to be converted to Forward for Black-76.
+    // A common simplification for index options is to use Spot as F directly if cost of carry is low or TTE is short.
+    // For equity options, F = S * e^((r-q)T), where q is dividend yield.
+    // For simplicity, using F = S * e^(rT) if not an option on future.
+    // If instrumentDetails contains a field like `instrumentDetails.isOptionOnFuture` you could use `instrumentDetails.underlyingFuturesPrice`.
+    const forwardPrice = underlyingPrice * Math.exp(riskFreeRate * TTE); // Simplified forward price
+
+    return black76Price(
+      forwardPrice,
+      Number(instrumentDetails.strike),
+      TTE,
+      riskFreeRate,
+      scenarioIV, // Expects decimal (e.g., 0.2 for 20%)
+      instrumentDetails.optionType
+    );
+  } else if (leg.legType === 'future') {
+    // Theoretical price of a future at a target date *before* its expiry is complex
+    // and depends on cost of carry (F = S * e^((r-q)T)).
+    // If targetDateISO is AT or AFTER the future's expiry, its price is just the underlyingPrice.
+    // For simplicity in P&L projection to a date BEFORE future's expiry, we can:
+    // 1. Assume the future's price simply moves with the underlying (delta 1).
+    //    So, its "theoretical price" relative to the target 'underlyingPrice' is just 'underlyingPrice'.
+    //    This is a common simplification for P&L projection charts.
+    // 2. OR calculate the expected future price: F_target = underlyingPrice * e^((r-q)T_to_future_expiry_from_target_date)
+    //    This requires knowing the future's actual expiry and dividend yield (q).
+
+    // Simplification: Assume future's price at target date is the projected 'underlyingPrice'.
+    // This means its P&L will be (underlyingPrice - entryPrice).
+    return underlyingPrice; // The "value" of the future contract tracks the underlying
+  }
+  return parseFloat(leg.price); // Fallback
 };
+
+// MODIFIED: calculateLegPnLAtTargetDate - handles options and futures
 const calculateLegPnLAtTargetDate = (
   leg,
   underlyingPrice,
   targetDateISO,
   riskFreeRate,
-  scenarioIV,
-  getOptionByToken
+  getScenarioIV,
+  getInstrumentByToken
 ) => {
   const theoreticalPricePerShare = calculateLegTheoreticalPrice(
     leg,
     underlyingPrice,
     targetDateISO,
     riskFreeRate,
-    scenarioIV,
-    getOptionByToken
+    getScenarioIV, // Pass the function itself
+    getInstrumentByToken
   );
   const entryPricePerShare = parseFloat(leg.price);
-  const multiplier = (leg.lots || 1) * (leg.lotSize || 1);
+  if (isNaN(entryPricePerShare) || isNaN(theoreticalPricePerShare)) return 0;
+
+  const contractMultiplier = (Number(leg.lots) || 1) * (Number(leg.lotSize) || 1);
+  const direction = leg.buySell === "Buy" ? 1 : -1;
   const pnlPerShare = theoreticalPricePerShare - entryPricePerShare;
-  return pnlPerShare * multiplier * (leg.buySell === "Buy" ? 1 : -1);
+  return pnlPerShare * contractMultiplier * direction;
 };
+
+// MODIFIED: getRepresentativeIVForSD - now uses getInstrumentByToken
 const getRepresentativeIVForSD = (
-  selectedLegs,
+  selectedLegs, // These are strategy legs from UI
   underlyingSpotPrice,
-  getOptionByToken,
-  defaultIV = 20
+  getInstrumentByToken, // MODIFIED
+  getScenarioIV, // NEW: To get scenario-adjusted IV
+  defaultIV = 20 // e.g. 20%
 ) => {
   if (!selectedLegs || selectedLegs.length === 0 || !underlyingSpotPrice)
-    return defaultIV / 100;
-  let closestAtmLegData = null;
+    return defaultIV / 100; // Return decimal
+
+  let closestAtmOptionLeg = null;
   let minDiffToAtm = Infinity;
+
+  // Find the ATM option leg among selected legs
   selectedLegs.forEach((sl) => {
-    const legDataFromContext = getOptionByToken(sl.token);
-    if (
-      legDataFromContext &&
-      legDataFromContext.iv &&
-      legDataFromContext.strike
-    ) {
-      const strikeDiff = Math.abs(
-        Number(legDataFromContext.strike) - underlyingSpotPrice
-      );
-      if (strikeDiff < minDiffToAtm) {
-        minDiffToAtm = strikeDiff;
-        closestAtmLegData = legDataFromContext;
+    if (sl.legType === 'option' && sl.token) { // Only consider options
+      const instrumentDetails = getInstrumentByToken(sl.token);
+      if (instrumentDetails && instrumentDetails.legTypeDb === 'option' && instrumentDetails.strike !== undefined) {
+        const strikeDiff = Math.abs(Number(instrumentDetails.strike) - underlyingSpotPrice);
+        if (strikeDiff < minDiffToAtm) {
+          minDiffToAtm = strikeDiff;
+          closestAtmOptionLeg = sl; // Store the leg from strategyLegs
+        }
       }
     }
   });
-  if (closestAtmLegData && closestAtmLegData.iv)
-    return parseFloat(closestAtmLegData.iv) / 100;
-  if (selectedLegs.length > 0) {
-    const firstLegDataFromContext = getOptionByToken(selectedLegs[0].token);
-    if (firstLegDataFromContext && firstLegDataFromContext.iv)
-      return parseFloat(firstLegDataFromContext.iv) / 100;
+
+  if (closestAtmOptionLeg) {
+    const scenarioIV = getScenarioIV(closestAtmOptionLeg.token); // Get scenario-adjusted IV (decimal)
+    if (scenarioIV > 0) return scenarioIV;
   }
+  // Fallback if no suitable option leg found or IV is zero
   return defaultIV / 100;
 };
 
+
 // --- Exported Main Calculation Functions ---
+
+// MODIFIED: generatePayoffChartData (for the main chart in PayoffChart.jsx)
 export const generatePayoffChartData = ({
   strategyLegs,
-  niftyTargetString,
-  displaySpotForSlider,
+  niftyTargetString, // Scenario spot from input/slider
+  displaySpotForSlider, // Fallback spot if niftyTargetString is invalid
   targetDateISO,
   riskFreeRate,
-  getScenarioIV,
-  getOptionByToken,
-  underlyingSpotPrice,
+  getScenarioIV, // For options
+  getInstrumentByToken, // MODIFIED: Was getOptionByToken
+  underlyingSpotPrice, // Actual live spot price
+  fullInstrumentChainData = [], // MODIFIED: Was fullOptionChainData, now all instruments
+  sdDays = 30, // NEW from PayoffChart.jsx
+  PAYOFF_CHART_X_AXIS_RANGE_FACTOR = 0.2, // How much % range around strikes/spot for X-axis
+  // PAYOFF_CHART_POINTS from config
 }) => {
   const selectedLegs = strategyLegs.filter(
-    (l) => l.selected && l.token && typeof l.price === "number"
+    (l) => l.selected && l.token && typeof l.price === "number" && l.legType // Ensure legType exists
   );
-  if (selectedLegs.length === 0) return null;
-  const currentScenarioSpot =
+  // If no legs, no graph. Or graph of underlying if no legs? For now, empty.
+  // if (selectedLegs.length === 0) return { points: [], sdBands: null, minX: 0, maxX: 0, pnlAtCurrentTarget:0, currentActualSpot: underlyingSpotPrice };
+
+  // Determine the center of the x-axis for the chart
+  const centerSpotForChart =
     niftyTargetString !== "" && !isNaN(parseFloat(niftyTargetString))
       ? parseFloat(niftyTargetString)
-      : typeof displaySpotForSlider === "number"
+      : typeof displaySpotForSlider === "number" && displaySpotForSlider > 0
       ? displaySpotForSlider
-      : parseFloat(displaySpotForSlider);
-  if (isNaN(currentScenarioSpot) || currentScenarioSpot <= 0) return null;
-  let minStrike = Infinity,
-    maxStrike = 0;
+      : underlyingSpotPrice > 0 ? underlyingSpotPrice : 0;
+
+  if (centerSpotForChart <= 0 && selectedLegs.length === 0) return { points: [], sdBands: null, minX:0, maxX:0, pnlAtCurrentTarget:0, currentActualSpot: underlyingSpotPrice };
+
+
+  let minStrike = Infinity, maxStrike = 0, hasOptionLegs = false;
   selectedLegs.forEach((leg) => {
-    const strikeNum = Number(leg.strike);
-    minStrike = Math.min(minStrike, strikeNum);
-    maxStrike = Math.max(maxStrike, strikeNum);
+    if (leg.legType === 'option' && leg.strike !== undefined) {
+      hasOptionLegs = true;
+      const strikeNum = Number(leg.strike);
+      minStrike = Math.min(minStrike, strikeNum);
+      maxStrike = Math.max(maxStrike, strikeNum);
+    }
   });
-  const strikeRange =
-    maxStrike > 0 && minStrike !== Infinity && maxStrike > minStrike
-      ? maxStrike - minStrike
-      : 0;
-  const padding =
-    strikeRange > 0
-      ? strikeRange * PAYOFF_CHART_XAXIS_STRIKE_PADDING_FACTOR
-      : currentScenarioSpot * 0.2;
-  let lowBound =
-    (minStrike !== Infinity ? minStrike : currentScenarioSpot) - padding;
-  let highBound = (maxStrike > 0 ? maxStrike : currentScenarioSpot) + padding;
-  lowBound = Math.max(0.01, lowBound);
-  const labels = [];
+
+  let lowBound, highBound;
+  if (hasOptionLegs && minStrike !== Infinity && maxStrike > 0) {
+    const strikeRange = maxStrike - minStrike;
+    const padding = strikeRange > 0 ? strikeRange * PAYOFF_CHART_XAXIS_STRIKE_PADDING_FACTOR : centerSpotForChart * PAYOFF_CHART_X_AXIS_RANGE_FACTOR;
+    lowBound = minStrike - padding;
+    highBound = maxStrike + padding;
+  } else { // No option legs, or only future legs, or invalid strikes
+    const padding = centerSpotForChart * PAYOFF_CHART_X_AXIS_RANGE_FACTOR || 1000; // Default padding if centerSpotForChart is 0
+    lowBound = centerSpotForChart - padding;
+    highBound = centerSpotForChart + padding;
+  }
+  lowBound = Math.max(0.01, lowBound); // Ensure non-negative
+
+  const labels = []; // Spot prices for x-axis
   const pnlOnExpiryData = [];
   const pnlOnTargetDateData = [];
+  const callOIData = [];
+  const putOIData = [];
+
   for (let i = 0; i <= PAYOFF_CHART_POINTS; i++) {
-    const underlyingPriceAtTick =
-      lowBound + ((highBound - lowBound) * i) / PAYOFF_CHART_POINTS;
-    labels.push(underlyingPriceAtTick.toFixed(0));
+    const underlyingPriceAtTick = lowBound + ((highBound - lowBound) * i) / PAYOFF_CHART_POINTS;
+    labels.push(underlyingPriceAtTick); // Store the exact float for calculations
+
     let totalExpiryPnLForTick = 0;
     let totalTargetDatePnLForTick = 0;
+
     selectedLegs.forEach((leg) => {
-      totalExpiryPnLForTick += calculateLegPnLAtExpiry(
-        leg,
-        underlyingPriceAtTick
-      );
+      const instrumentDetails = getInstrumentByToken(leg.token); // Get details for lotSize etc.
+      totalExpiryPnLForTick += calculateLegPnLAtExpiry(leg, underlyingPriceAtTick, instrumentDetails);
       totalTargetDatePnLForTick += calculateLegPnLAtTargetDate(
         leg,
         underlyingPriceAtTick,
         targetDateISO,
         riskFreeRate,
-        getScenarioIV(leg.token),
-        getOptionByToken
+        getScenarioIV, // Pass the function
+        getInstrumentByToken
       );
     });
     pnlOnExpiryData.push(totalExpiryPnLForTick);
     pnlOnTargetDateData.push(totalTargetDatePnLForTick);
+
+    // MODIFIED: OI Data - filter fullInstrumentChainData for options only
+    let callOIForTick = 0, putOIForTick = 0;
+    if (Array.isArray(fullInstrumentChainData)) {
+        fullInstrumentChainData.forEach(instrument => {
+            // Ensure it's an option and matches the current spot price tick (as strike)
+            if (instrument.legTypeDb === 'option' && instrument.strike !== undefined && Math.abs(Number(instrument.strike) - underlyingPriceAtTick) < 0.01) {
+                if (instrument.optionType === 'CE' && instrument.marketData?.oi) {
+                    callOIForTick += Number(instrument.marketData.oi);
+                } else if (instrument.optionType === 'PE' && instrument.marketData?.oi) {
+                    putOIForTick += Number(instrument.marketData.oi);
+                }
+            }
+        });
+    }
+    callOIData.push(callOIForTick);
+    putOIData.push(putOIForTick);
   }
+
+  // P&L at the specific niftyTarget / currentScenarioSpot for annotation
   let pnlAtNiftyTargetOnDate = 0;
   selectedLegs.forEach((leg) => {
     pnlAtNiftyTargetOnDate += calculateLegPnLAtTargetDate(
       leg,
-      currentScenarioSpot,
+      centerSpotForChart, // Use the chart's center spot for this annotation
       targetDateISO,
       riskFreeRate,
-      getScenarioIV(leg.token),
-      getOptionByToken
+      getScenarioIV,
+      getInstrumentByToken
     );
   });
+
+  // SD Bands calculation
   let sdLevels = null;
-  if (underlyingSpotPrice && targetDateISO) {
-    const representativeIV = getRepresentativeIVForSD(
-      selectedLegs,
-      underlyingSpotPrice,
-      getOptionByToken
-    );
-    const today = new Date();
-    const dteForSDbands = timeToExpiryDays(targetDateISO, today);
-    if (representativeIV > 0 && dteForSDbands > 0) {
-      const timeFactor = Math.sqrt(dteForSDbands / 365);
-      const oneSdMove = underlyingSpotPrice * representativeIV * timeFactor;
+  if (underlyingSpotPrice && underlyingSpotPrice > 0 && sdDays > 0) { // Use live underlyingSpotPrice for SD bands
+    const representativeIV = getRepresentativeIVForSD(selectedLegs, underlyingSpotPrice, getInstrumentByToken, getScenarioIV); // Pass getScenarioIV
+    const dteForSDbandsInYears = sdDays / 365.25; // Use sdDays
+    if (representativeIV > 0 && dteForSDbandsInYears > 0) {
+      const oneSdMove = underlyingSpotPrice * representativeIV * Math.sqrt(dteForSDbandsInYears);
       sdLevels = {
+        center: underlyingSpotPrice, // SD bands centered around live spot
         plusOneSD: underlyingSpotPrice + oneSdMove,
         minusOneSD: underlyingSpotPrice - oneSdMove,
         plusTwoSD: underlyingSpotPrice + 2 * oneSdMove,
@@ -212,184 +303,154 @@ export const generatePayoffChartData = ({
       };
     }
   }
-  const targetDateLabel = targetDateISO
-    ? new Date(targetDateISO).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-      })
-    : "Target";
+
+  // Format labels for display if needed (e.g., toFixed(0))
+  const displayLabels = labels.map(l => l.toFixed(0));
+  
+  // Return structure for PayoffChart.jsx (points for chart.js {x,y} format)
+  const pointsData = labels.map((spot, index) => ({
+      spot: spot, // Store the precise float value
+      pnlAtExpiry: pnlOnExpiryData[index],
+      pnlAtTargetDate: pnlOnTargetDateData[index],
+      callOI: callOIData[index],
+      putOI: putOIData[index],
+      // isCurrentSpot: Math.abs(spot - centerSpotForChart) < 0.01 // Or related to underlyingSpotPrice
+  }));
+
+
   return {
-    labels,
-    datasets: [
-      {
-        label: "On Expiry",
-        data: pnlOnExpiryData,
-        borderColor: "#DC3545",
-        tension: 0,
-        pointRadius: 0,
-        borderWidth: 2,
-        fill: false,
-        segment: {
-          borderColor: (ctx) =>
-            ctx.p0.raw < 0 && ctx.p1.raw < 0
-              ? "#DC3545"
-              : ctx.p0.raw > 0 && ctx.p1.raw > 0
-              ? "#28A745"
-              : "#6c757d",
-        },
-      },
-      {
-        label: `On ${targetDateLabel}`,
-        data: pnlOnTargetDateData,
-        borderColor: "#007BFF",
-        tension: 0.1,
-        pointRadius: 0,
-        borderWidth: 2,
-        fill: false,
-        borderDash: [5, 5],
-      },
-    ],
-    minX: lowBound,
-    maxX: highBound,
-    pnlAtCurrentTarget: pnlAtNiftyTargetOnDate,
-    currentActualSpot: underlyingSpotPrice,
-    sdLevels: sdLevels,
+    points: pointsData, // This structure is now expected by PayoffChart.jsx
+    sdBands: sdLevels, // Renamed from sdLevels for consistency with PayoffChart.jsx
+    // Removed minX, maxX, pnlAtCurrentTarget, currentActualSpot as PayoffChart.jsx derives these or gets them differently
   };
 };
 
-export const generateGreeksTableData = ({
+
+// MODIFIED: generateGreeksTableData (for P&L Table and Greeks Table in PayoffChartSection.jsx)
+export const generateGreeksTableData = ({ // This is the function previously named calculateProjectedStrategyData
   strategyLegs,
-  niftyTarget,
-  targetDate,
-  getOptionByToken,
+  niftyTarget, // Target spot string
+  targetDate,  // Target date ISO string
+  getInstrumentByToken, // MODIFIED: Was getOptionByToken
   riskFreeRate,
-  getScenarioIV,
+  getScenarioIV, // For options
   multiplyByLotSize,
   multiplyByNumLots,
+  underlyingSpotPrice, // NEW: Pass live spot for live Greeks calculation
 }) => {
   if (
-    !niftyTarget ||
-    !targetDate ||
-    strategyLegs.length === 0 ||
-    !getOptionByToken ||
-    !riskFreeRate ||
-    !getScenarioIV
-  )
-    return {
-      legs: [],
-      totals: { projectedPnL: 0, delta: 0, gamma: 0, theta: 0, vega: 0 },
-    };
-  const numericNiftyTarget = parseFloat(niftyTarget);
-  if (isNaN(numericNiftyTarget))
-    return {
-      legs: [],
-      totals: { projectedPnL: 0, delta: 0, gamma: 0, theta: 0, vega: 0 },
-    };
-  const projectionDate = new Date(targetDate);
-  let aggProjectedPnL = 0,
-    aggDelta = 0,
-    aggGamma = 0,
-    aggTheta = 0,
-    aggVega = 0;
+    strategyLegs.length === 0 || !getInstrumentByToken || !riskFreeRate || !getScenarioIV
+  ) {
+    return { legs: [], totals: { projectedPnL: 0, delta: 0, gamma: 0, theta: 0, vega: 0 }};
+  }
+
+  const numericScenarioSpot = parseFloat(niftyTarget);
+  const useProjectedScenario = targetDate && !isNaN(numericScenarioSpot) && numericScenarioSpot > 0;
+  
+  // If not using projected scenario (e.g., niftyTarget is empty), use live spot for Greeks.
+  const spotForCalc = useProjectedScenario ? numericScenarioSpot : (underlyingSpotPrice || 0);
+  if (spotForCalc <= 0) { // If no valid spot can be determined
+      return { legs: [], totals: { projectedPnL: 0, delta: 0, gamma: 0, theta: 0, vega: 0 }};
+  }
+
+  const projectionDate = useProjectedScenario ? new Date(targetDate) : new Date(); // If not projected, use "now"
+
+  let aggProjectedPnL = 0, aggDelta = 0, aggGamma = 0, aggTheta = 0, aggVega = 0;
+
   const projectedLegsResult = strategyLegs
-    .filter((leg) => leg.selected && leg.token && typeof leg.price === "number")
+    .filter((leg) => leg.selected && leg.token && leg.legType)
     .map((leg) => {
-      const liveOption = getOptionByToken(leg.token);
-      if (
-        !liveOption ||
-        !liveOption.strike ||
-        !liveOption.expiry ||
-        liveOption.optionType === undefined
-      )
-        return {
-          ...leg,
-          instrumentSymbolConcise: `${leg.buySell} ${leg.lots || 1}L ${
-            leg.strike || "N/A"
-          }${leg.optionType || "N/A"}`,
-          projectedOptionPrice: null,
-          projectedPnL: 0,
-          projectedGreeks: {},
-          entryPrice: parseFloat(leg.price),
-          ltp: null,
+      const instrumentDetails = getInstrumentByToken(leg.token);
+      if (!instrumentDetails) {
+        return { /* ... error leg structure ... */
+            ...leg, instrumentSymbolConcise: `${leg.buySell} ${leg.lots || 1}L ${leg.instrumentSymbol || "Data N/A"}`,
+            projectedValue: null, projectedPnL: 0, projectedGreeks: {}, entryPrice: parseFloat(leg.price), ltp: null,
         };
-      const scenarioIVForLeg = getScenarioIV(leg.token);
-      const TTE = timeToExpiry(liveOption.expiry, projectionDate);
-      let projectedOptPricePerShare;
-      let legGreeks = { delta: 0, gamma: 0, theta: 0, vega: 0 };
-      if (TTE <= 0) {
-        projectedOptPricePerShare = calculateLegValueAtExpiry(
-          leg,
-          numericNiftyTarget
-        );
-        const F_g = numericNiftyTarget;
-        legGreeks = black76Greeks(
-          F_g,
-          Number(leg.strike),
-          0.000001,
-          riskFreeRate,
-          scenarioIVForLeg > 0 ? scenarioIVForLeg : 0.01,
-          leg.optionType
-        );
-      } else if (scenarioIVForLeg > 0) {
-        const F_p = numericNiftyTarget;
-        projectedOptPricePerShare = black76Price(
-          F_p,
-          Number(leg.strike),
-          TTE,
-          riskFreeRate,
-          scenarioIVForLeg,
-          leg.optionType
-        );
-        legGreeks = black76Greeks(
-          F_p,
-          Number(leg.strike),
-          TTE,
-          riskFreeRate,
-          scenarioIVForLeg,
-          leg.optionType
-        );
-      } else
-        projectedOptPricePerShare = calculateLegValueAtExpiry(
-          leg,
-          numericNiftyTarget
-        );
+      }
+
       const entryPriceNum = parseFloat(leg.price);
-      const pnlPerShare =
-        isNaN(projectedOptPricePerShare) || isNaN(entryPriceNum)
-          ? 0
-          : projectedOptPricePerShare - entryPriceNum;
+      // MODIFIED: Use leg.lotSize for contract multiplier for both types
+      const legContractSize = Number(leg.lotSize) || 1;
+      let legGreeks = { delta: 0, gamma: 0, theta: 0, vega: 0 };
+      let projectedValuePerShare = entryPriceNum; // Default to entry price if cannot calculate
+
+      if (leg.legType === 'option') {
+        if (!instrumentDetails.strike || !instrumentDetails.expiry || !instrumentDetails.optionType || instrumentDetails.legTypeDb !== 'option') {
+          // Invalid option data for calculation
+        } else {
+            const scenarioIVForLeg = getScenarioIV(leg.token); // Decimal IV
+            const T_to_option_expiry = timeToExpiry(instrumentDetails.expiry, projectionDate);
+
+            if (T_to_option_expiry <= 0.000001) { // At or past expiry
+                projectedValuePerShare = calculateLegValueAtExpiry(leg, spotForCalc, instrumentDetails);
+                // For Greeks at T=0, some conventions use limit, others 0 for gamma/theta/vega
+                legGreeks = black76Greeks(spotForCalc, Number(instrumentDetails.strike), 0.000001, riskFreeRate, scenarioIVForLeg > 0 ? scenarioIVForLeg : 0.001, instrumentDetails.optionType);
+            } else if (scenarioIVForLeg > 0) {
+                // Using spotForCalc as F; for equity options, a proper F = S * e^((r-q)T) is better.
+                // For index options, F is often approximated by S.
+                const F_calc = spotForCalc * Math.exp(riskFreeRate * T_to_option_expiry); // Simple forward
+                projectedValuePerShare = black76Price(F_calc, Number(instrumentDetails.strike), T_to_option_expiry, riskFreeRate, scenarioIVForLeg, instrumentDetails.optionType);
+                legGreeks = black76Greeks(F_calc, Number(instrumentDetails.strike), T_to_option_expiry, riskFreeRate, scenarioIVForLeg, instrumentDetails.optionType);
+            } else { // IV is zero, value is intrinsic (or discounted intrinsic if TTE > 0)
+                projectedValuePerShare = calculateLegValueAtExpiry(leg, spotForCalc, instrumentDetails);
+                 // Greeks for zero IV (delta is 0 or +/-1, others 0)
+                legGreeks = black76Greeks(spotForCalc, Number(instrumentDetails.strike), T_to_option_expiry, riskFreeRate, 0.000001, instrumentDetails.optionType);
+            }
+        }
+      } else if (leg.legType === 'future') {
+        // For a future, its projected "value" per share IS the spotForCalc.
+        projectedValuePerShare = spotForCalc;
+        // Simplified Greeks for Futures
+        legGreeks.delta = 1; // Base delta is 1 per unit. Sign comes from buySell.
+        legGreeks.gamma = 0;
+        legGreeks.theta = 0; // Can be non-zero if considering funding costs/cost of carry daily change
+        legGreeks.vega = 0;
+      }
+      
+      const pnlPerShare = isNaN(projectedValuePerShare) || isNaN(entryPriceNum) ? 0 : (projectedValuePerShare - entryPriceNum);
       let scaleFactor = 1;
-      if (multiplyByLotSize && leg.lotSize) scaleFactor *= leg.lotSize;
-      if (multiplyByNumLots && leg.lots) scaleFactor *= leg.lots;
+      if (multiplyByLotSize) scaleFactor *= legContractSize;
+      if (multiplyByNumLots && leg.lots) scaleFactor *= Number(leg.lots);
+      
       const positionDirection = leg.buySell === "Buy" ? 1 : -1;
       const totalLegPnl = pnlPerShare * scaleFactor * positionDirection;
-      aggProjectedPnL += totalLegPnl;
-      const contractMultiplier = (leg.lots || 1) * (leg.lotSize || 1);
-      if (!isNaN(legGreeks.delta))
-        aggDelta += legGreeks.delta * contractMultiplier * positionDirection;
-      if (!isNaN(legGreeks.gamma))
-        aggGamma += legGreeks.gamma * contractMultiplier;
-      if (!isNaN(legGreeks.theta))
-        aggTheta += legGreeks.theta * contractMultiplier * positionDirection;
-      if (!isNaN(legGreeks.vega))
-        aggVega += legGreeks.vega * contractMultiplier * positionDirection;
+
+      // Aggregate scaled greeks
+      if (!isNaN(totalLegPnl)) aggProjectedPnL += totalLegPnl;
+      if (!isNaN(legGreeks.delta)) aggDelta += legGreeks.delta * positionDirection * scaleFactor;
+      if (!isNaN(legGreeks.gamma)) aggGamma += legGreeks.gamma * scaleFactor; // Gamma usually additive for portfolio
+      if (!isNaN(legGreeks.theta)) aggTheta += legGreeks.theta * positionDirection * scaleFactor;
+      if (!isNaN(legGreeks.vega)) aggVega += legGreeks.vega * positionDirection * scaleFactor;
+
+
+      // Construct display symbol
+      let displaySymbol = leg.instrumentSymbol || "N/A";
+      if (instrumentDetails) {
+        if (leg.legType === 'option' && instrumentDetails.strike && instrumentDetails.optionType && instrumentDetails.expiry) {
+            displaySymbol = `${Number(instrumentDetails.strike)}${instrumentDetails.optionType} ${formatDisplayExpiry(instrumentDetails.expiry)}`;
+        } else if (leg.legType === 'future' && instrumentDetails.instrumentSymbol) {
+            displaySymbol = instrumentDetails.instrumentSymbol;
+        }
+      }
+
+
       return {
-        ...leg,
-        instrumentSymbolConcise: `${leg.buySell === "Buy" ? "" : "S "} ${
-          leg.lots || 1
-        }L ${Number(leg.strike)}${leg.optionType} ${new Date(
-          liveOption.expiry
-        ).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`,
-        projectedOptionPrice: projectedOptPricePerShare,
+        ...leg, // Spread original leg data
+        instrumentSymbolConcise: `${leg.buySell === "Buy" ? "B" : "S"} ${leg.lots || 1}x ${displaySymbol}`,
+        projectedValue: isNaN(projectedValuePerShare) ? null : projectedValuePerShare,
         projectedPnL: totalLegPnl,
-        projectedGreeks: legGreeks,
+        // Return UNscaled greeks for the leg. Scaling is applied to totals and can be applied in table display.
+        projectedGreeks: {
+            delta: legGreeks.delta * positionDirection, // Make delta directional per leg
+            gamma: legGreeks.gamma,
+            theta: legGreeks.theta * positionDirection, // Theta is directional P&L effect
+            vega: legGreeks.vega * positionDirection   // Vega effect is directional
+        },
         entryPrice: entryPriceNum,
-        ltp:
-          liveOption.lastPrice !== undefined
-            ? parseFloat(liveOption.lastPrice)
-            : null,
+        ltp: instrumentDetails?.lastPrice !== undefined ? parseFloat(instrumentDetails.lastPrice) : null,
       };
     });
+
   return {
     legs: projectedLegsResult,
     totals: {
@@ -400,141 +461,4 @@ export const generateGreeksTableData = ({
       vega: aggVega,
     },
   };
-};
-
-
-function calculateLegIntrinsicValueAtExpiry(leg, spot) {
-  const strike = Number(leg.strike);
-  if (leg.optionType === "CE") return Math.max(0, spot - strike);
-  if (leg.optionType === "PE") return Math.max(0, strike - spot);
-  return 0;
-}
-
-/**
- * Calculate the payoff (profit/loss) of a single leg at expiry.
- */
-function calculateLegPayoffAtExpiry(leg, spot) {
-  const intrinsic = calculateLegIntrinsicValueAtExpiry(leg, spot);
-  const premium = parseFloat(leg.price);
-  const lotSize = leg.lotSize || 1;
-  const lots = leg.lots || 1;
-  const quantity = lotSize * lots;
-  const direction = leg.buySell === "Buy" ? 1 : -1;
-  return (intrinsic - premium) * direction * quantity;
-}
-
-/**
- * Calculate the P&L of a single leg at the target date using Black-76 price.
- * @param {Object} leg - The option leg
- * @param {number} spot - Target underlying price
- * @param {string} targetDateISO - Target date in ISO format
- * @param {number} riskFreeRate - Annualized risk-free rate (decimal, e.g. 0.06)
- * @param {number} iv - Implied volatility (decimal, e.g. 0.18)
- * @param {Function} getOptionByToken - Function to get option details by token
- * @returns {number}
- */
-function calculateLegPnLAtTargetDate(
-  leg,
-  spot,
-  targetDateISO,
-  riskFreeRate,
-  iv,
-  getOptionByToken
-) {
-  // Get option details (e.g., expiry date)
-  const option = getOptionByToken(leg.token);
-  if (!option) return 0;
-
-  // Calculate time to expiry in years
-  const expiryDate = new Date(option.expiry);
-  const targetDate = new Date(targetDateISO);
-  const msInYear = 365 * 24 * 60 * 60 * 1000;
-  const timeToExpiry = Math.max((expiryDate - targetDate) / msInYear, 0);
-
-  // Black-76 price at target date
-  const isCall = leg.optionType === "CE";
-  const strike = Number(leg.strike);
-  const premium = parseFloat(leg.price);
-  const lotSize = leg.lotSize || 1;
-  const lots = leg.lots || 1;
-  const quantity = lotSize * lots;
-  const direction = leg.buySell === "Buy" ? 1 : -1;
-
-  // Use Black-76 to get theoretical price at target date
-  const theoPrice = black76Price({
-    isCall,
-    future: spot, // For index options, spot is used as future
-    strike,
-    time: timeToExpiry,
-    rate: riskFreeRate,
-    vol: iv,
-  });
-
-  return (theoPrice - premium) * direction * quantity;
-}
-
-/**
- * Generate the payoff table for the entire strategy.
- */
-export const generatePayoffTableData = ({
-  strategyLegs,
-  niftyTargetString,
-  displaySpotForSlider,
-  targetDateISO,
-  riskFreeRate,
-  getScenarioIV,
-  getOptionByToken,
-  targetInterval,
-  PAYOFF_TABLE_POINTS = 20,
-  PAYOFF_TABLE_INTERVAL_STEP = 50,
-}) => {
-  // Filter valid, selected legs
-  const selectedLegs = strategyLegs.filter(
-    (l) => l.selected && l.token && typeof l.price === "number"
-  );
-  if (selectedLegs.length === 0) return [];
-
-  // Determine scenario spot
-  const currentScenarioSpot =
-    niftyTargetString !== "" && !isNaN(parseFloat(niftyTargetString))
-      ? parseFloat(niftyTargetString)
-      : typeof displaySpotForSlider === "number"
-      ? displaySpotForSlider
-      : parseFloat(displaySpotForSlider);
-  if (isNaN(currentScenarioSpot) || currentScenarioSpot <= 0) return [];
-
-  const tableRows = [];
-  const halfPoints = Math.floor(PAYOFF_TABLE_POINTS / 2);
-  const intervalStep = Number(targetInterval) || PAYOFF_TABLE_INTERVAL_STEP;
-
-  for (let i = -halfPoints; i <= halfPoints; i++) {
-    const targetPrice = currentScenarioSpot + i * intervalStep;
-    if (targetPrice < 0.01 && i !== 0) continue;
-
-    // Sum P&L at target date and at expiry for all legs
-    let pnlAtTargetDate = 0;
-    let pnlAtExpiry = 0;
-
-    selectedLegs.forEach((leg) => {
-      // P&L at target date (uses Black-76)
-      pnlAtTargetDate += calculateLegPnLAtTargetDate(
-        leg,
-        targetPrice,
-        targetDateISO,
-        riskFreeRate,
-        getScenarioIV(leg.token),
-        getOptionByToken
-      );
-      // P&L at expiry (intrinsic value only)
-      pnlAtExpiry += calculateLegPayoffAtExpiry(leg, targetPrice);
-    });
-
-    tableRows.push({
-      targetPrice: Number(targetPrice.toFixed(2)),
-      pnlAtTargetDate: Number(pnlAtTargetDate.toFixed(2)),
-      pnlAtExpiry: Number(pnlAtExpiry.toFixed(2)),
-      isCurrentTarget: i === 0,
-    });
-  }
-  return tableRows;
 };

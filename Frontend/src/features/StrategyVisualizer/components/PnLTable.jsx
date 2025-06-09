@@ -19,10 +19,10 @@ const PnLTable = ({ projectedLegsData, totals,multiplier }) => {
   if (!projectedLegsData || projectedLegsData.length === 0) {
     return <div className="pnl-table-container no-data-message">Add strategy legs and set target to view P&L.</div>;
   }
-
+ console.log(projectedLegsData)
   // Calculate summed prices for the total row if needed (as per UI, though less common)
   const summedPrices = projectedLegsData.reduce((acc, leg) => {
-      acc.targetPrice += Number(leg.projectedOptionPrice) || 0;
+      acc.targetPrice += Number(leg.projectedValue) || 0;
       acc.entryPrice += Number(leg.entryPrice) || 0;
       acc.ltp += Number(leg.ltp) || 0;
       return acc;
@@ -44,9 +44,9 @@ const PnLTable = ({ projectedLegsData, totals,multiplier }) => {
         <tbody>
           {projectedLegsData.map((leg) => (
             <tr key={leg.id}>
-              <td>{leg.instrument}</td>
-              <td>{formatValue(leg.projectedPnLPerShare*multiplier)}</td> {/* Per-share P&L */}
-              <td>{formatValue(leg.projectedOptionPrice*multiplier)}</td>
+              <td>{leg.instrumentSymbolConcise}</td>
+              <td>{formatValue(leg.projectedPnL*multiplier)}</td> {/* Per-share P&L */}
+              <td>{formatValue(leg.projectedValue*multiplier)}</td>
               <td>{formatValue(leg.entryPrice*multiplier)}</td>
               <td>{formatValue(leg.ltp*multiplier)}</td>
             </tr>

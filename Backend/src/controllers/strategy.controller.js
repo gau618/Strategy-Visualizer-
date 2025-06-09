@@ -11,7 +11,7 @@ const validateLegs = (legs) => {
     if (
       !leg.token ||
       typeof leg.strike !== "number" ||
-      !["CE", "PE"].includes(leg.optionType) ||
+      !["CE", "PE"," "].includes(leg.optionType) ||
       !leg.expiry ||
       !["Buy", "Sell"].includes(leg.buySell) ||
       typeof leg.lots !== "number" ||
@@ -67,7 +67,7 @@ export const createStrategy = async (req, res) => {
     }
 
     const newStrategy = await SavedStrategy.create(strategyData);
-
+   console.log("New strategy created:", newStrategy);
     res.status(201).json({
       success: true,
       message: `Strategy successfully saved as ${status}!`,

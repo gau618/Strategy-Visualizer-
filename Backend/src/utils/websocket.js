@@ -62,14 +62,16 @@ export async function setupWebSocket(io) {
   // --- END NEW ---
 
   // Your existing logic for selecting options and tokens for subscription
-  const niftyOptions = scripData
-    .filter(s => s.symbol?.startsWith("NIFTY") && s.instrumenttype === "OPTIDX" && s.exch_seg === "NFO")
+const niftyTokens = scripData
+    .filter(s => s.symbol?.startsWith("NIFTY") && (s.instrumenttype==="OPTSTK"||s.instrumenttype==="OPTIDX"|| s.instrumenttype === "FUTIDX"|| s.instrumenttype==="FUTSTK") && s.exch_seg === "NFO")
     .slice(0, 400).map(s => String(s.token).trim());
-  const bankniftyOptions = scripData
-    .filter(s => s.symbol?.startsWith("BANKNIFTY") && s.instrumenttype === "OPTIDX" && s.exch_seg === "NFO")
+
+const bankniftyTokens = scripData
+    .filter(s => s.symbol?.startsWith("BANKNIFTY") && (s.instrumenttype==="OPTSTK"||s.instrumenttype==="OPTIDX"||s.instrumenttype === "FUTIDX"|| s.instrumenttype==="FUTSTK") && s.exch_seg === "NFO")
     .slice(0, 400).map(s => String(s.token).trim());
+
   
-  const optionTokens = [...new Set([...niftyOptions, ...bankniftyOptions])];
+  const optionsAnsFuturesTokens = [...new Set([...niftyTokens, ...bankniftyTokens])];
   const spotTokensForSubscription = [NIFTY_SPOT_TOKEN, BANKNIFTY_SPOT_TOKEN].filter(Boolean); // Ensure no null/undefined
 
   // Your existing WebSocket connection logic
@@ -94,11 +96,11 @@ export async function setupWebSocket(io) {
       }
 
       // Your existing fetchData calls for options
-      if (optionTokens.length > 0) {
+      if (optionsAnsFuturesTokens.length > 0) {
         ws.fetchData({
             correlationID: "all_options", action: 1, mode: 3,
             exchangeType: 2, // NFO
-            tokens: optionTokens,
+            tokens: optionsAnsFuturesTokens,
         });
       }
       
@@ -114,6 +116,7 @@ export async function setupWebSocket(io) {
   // Your original handleTick function
   // The ONLY CHANGE here is the loop to call updateLatestInstrumentDataForStorageUtil
   function handleTick(data, currentTokenMetaMap, io_instance) { // params renamed for clarity
+   // console.log("(Main Feed) Received tick data:", data);
     if (data === "pong") return;
     const rawTicksArray = Array.isArray(data) ? data : [data]; // SmartAPI may send single object or array
     
@@ -134,27 +137,27 @@ export async function setupWebSocket(io) {
             if (token === NIFTY_SPOT_TOKEN){
                 //console.log(ltpRaw, token);
                 niftySpotPrice = ltp;
+                
               }
             if (token === BANKNIFTY_SPOT_TOKEN) bankniftySpotPrice = ltp;
         }
       }
     });
-
+ // console.log(rawTicksArray, "raw ticks received")
     // Process options (your existing logic)
-    // Pass currentTickProcessingTime to processOptionTick for accurate TTM calculation
-    const optionsData = rawTicksArray
+    // Pass currentTickProcessingTime to processInstrumentTick for accurate TTM calculation
+    const optionsAndFuturesData = rawTicksArray
       .map((rawTick) => {
-        
-        return processOptionTick(rawTick, currentTokenMetaMap, currentTickProcessingTime)}) // MODIFIED: Pass time
+        return processInstrumentTick(rawTick, currentTokenMetaMap, currentTickProcessingTime)}) // MODIFIED: Pass time
       .filter(Boolean);
-   // console.log(`🔄 (Main Feed) Processed ${optionsData.length} options from ${rawTicksArray.length} raw ticks.`);
-    if (optionsData.length > 0) {
-      // console.log("🔄 (Main Feed) Options data updated (for emit):", optionsData.length);
-      io_instance.emit("option_chain", optionsData); // Your existing emission
-       console.log(optionsData)
+   // console.log(`🔄 (Main Feed) Processed ${optionsAndFuturesData.length} options from ${rawTicksArray.length} raw ticks.`);
+    if (optionsAndFuturesData.length > 0) {
+      // console.log("🔄 (Main Feed) Options data updated (for emit):", optionsAndFuturesData.length);
+      io_instance.emit("option_and_future_Chain", optionsAndFuturesData); // Your existing emission
+      console.log(optionsAndFuturesData)
       // --- NEW: Update the storage utility's latest data map with these processed objects ---
-      optionsData.forEach(processedOptionObject => {
-        // The `processedOptionObject` is the direct output of your `processOptionTick`
+      optionsAndFuturesData.forEach(processedOptionObject => {
+        // The `processedOptionObject` is the direct output of your processInstrumentTick
         updateLatestInstrumentDataForStorageUtil(processedOptionObject);
       });
       // --- END NEW ---
@@ -177,112 +180,166 @@ export async function setupWebSocket(io) {
   
   // Your original processOptionTick function
   // MODIFIED: It now accepts `currentTickTime` as an argument
-  function processOptionTick(rawTick, currentTokenMetaMap, currentTickTime) {
-    // console.log(rawTick)
+// MODIFIED: Renamed function and added futures logic
+function processInstrumentTick(rawTick, currentTokenMetaMap, currentTickTime) {
     try {
-      // SmartAPI uses 'tk' for token in tick data, 'ltp' for last traded price
       const token = String(rawTick.tk || rawTick.token).replace(/"/g, "").trim();
       const meta = currentTokenMetaMap[token];
-     
-      if (!meta) return null;
-     
-      // This function only processes options as per its original logic
-      // if (!(meta.instrumenttype === "OPTIDX" || meta.instrumenttype === "OPTSTK")) {
-      //   return null; 
-      // }
-     
-      let spotPrice = null;
-      if (meta.symbol.startsWith("NIFTY")) spotPrice = niftySpotPrice;
-      else if (meta.symbol.startsWith("BANKNIFTY")) spotPrice = bankniftySpotPrice;
-      
-      if (spotPrice === null && (meta.symbol.startsWith("NIFTY") || meta.symbol.startsWith("BANKNIFTY"))) {
-        return null; // Spot price for the underlying is not yet available
+      //console.log("Processing tick for token:", token, "with meta:", meta);
+      if (!meta || !meta.instrumenttype) { // Ensure instrumenttype exists
+        // console.warn(`Skipping tick for token ${token}: Meta information or instrumenttype missing.`);
+        return null;
       }
-      //console.log(spotPrice)
-      // --- MODIFIED: Use currentTickTime for TTM calculation ---
-      const T = timeToExpiry(meta.expiry, currentTickTime); 
-      // --- END MODIFIED ---
-      if (T <= 0) return null; // Option expired or TTM is zero/negative
+
+      let spotPriceForCalc = null;
+      // Determine underlying based on meta or symbol convention
+      let underlyingName = meta.underlying_symbol || meta.name; // Prefer meta.underlying_symbol
+      if (!underlyingName) {
+          if (meta.symbol.startsWith("NIFTY")) underlyingName = "NIFTY";
+          else if (meta.symbol.startsWith("BANKNIFTY")) underlyingName = "BANKNIFTY";
+          else if (meta.symbol.startsWith("FINNIFTY")) underlyingName = "FINNIFTY";
+          else if (meta.symbol.startsWith("MIDCPNIFTY")) underlyingName = "MIDCPNIFTY";
+          // Add more specific underlying detections if needed
+      }
+
+      if (underlyingName === "NIFTY") spotPriceForCalc = niftySpotPrice;
+      else if (underlyingName === "BANKNIFTY") spotPriceForCalc = bankniftySpotPrice;
+      // For stock derivatives, you'd need to fetch their respective spot prices.
 
       const marketPriceLTP = parseFloat(rawTick.ltp || rawTick.last_traded_price) / 100;
-      if (isNaN(marketPriceLTP)) return null; // No valid LTP
-      
-      // SmartAPI provides 'f` field for individual contract future price (usually for stock futures/options)
-      // For index options, calculated F is more common if direct underlying future tick isn't used.
-      let F = (rawTick.f && (meta.instrumenttype === "OPTSTK" || meta.instrumenttype === "OPTIDX")) // Use if 'f' is present in tick
-        ? parseFloat(rawTick.f) / 100  // Assuming 'f' is already the scaled future price from feed
-        : spotPrice * Math.exp(RISK_FREE_RATE * T);
-
-      const bestBidRaw = rawTick.bp || rawTick.best_5_buy_data?.[0]?.price; // SmartAPI uses 'bp' for best bid price
-      const bestAskRaw = rawTick.sp || rawTick.best_5_sell_data?.[0]?.price; // SmartAPI uses 'sp' for best sell price
-      let marketPriceForIV = marketPriceLTP; // Default to LTP for IV calculation
-
-      if (bestBidRaw && bestAskRaw) {
-          const bestBid = parseFloat(bestBidRaw) / 100;
-          const bestAsk = parseFloat(bestAskRaw) / 100;
-          // Ensure marketPriceForIV (LTP) is positive to avoid division by zero or negative spread issues
-          if (bestBid > 0 && bestAsk > 0 && marketPriceForIV > 0 && (bestAsk - bestBid) / marketPriceForIV < 0.10) { // Your 10% spread
-              marketPriceForIV = (bestBid + bestAsk) / 2;
-          }
-      }
-      
-      const strike = Number(meta.strike);
-      const optionType = extractOptionType(meta.symbol);
-      
-      const iv = impliedVolBisection(marketPriceForIV, F, strike, T, RISK_FREE_RATE, optionType);
-      if (isNaN(iv) || !isFinite(iv)) { // Check for invalid IV
-        // console.warn(`IV calculation failed for ${token}. IV: ${iv}, MktPriceIV: ${marketPriceForIV}, F: ${F}, S: ${strike}, T: ${T}`);
-        return null; // Cannot calculate greeks without valid IV
+      if (isNaN(marketPriceLTP)) {
+        // console.warn(`Skipping tick for token ${token}: Invalid LTP.`);
+        return null;
       }
 
+      let T_to_expiry_years = null;
+      let strike = null;
+      let optionType = null;
+      let iv = null;
+      let greeks = { delta: null, gamma: null, theta: null, vega: null };
+      let forwardOrFuturePrice = null; // Will hold F for options, or LTP for futures
 
-      const greeks = black76Greeks(F, strike, T, RISK_FREE_RATE, iv, optionType);
+      const isOption = meta.instrumenttype === "OPTIDX" || meta.instrumenttype === "OPTSTK";
+      const isFuture = meta.instrumenttype === "FUTIDX" || meta.instrumenttype === "FUTSTK";
 
-      // This is the object structure your frontend expects AND the storage utility will consume
+      if (isOption) {
+        if (spotPriceForCalc === null) {
+          // console.warn(`Skipping option tick for ${token}: Spot price for ${underlyingName} not available.`);
+          return null; // Spot price is essential for option IV & Greeks
+        }
+        T_to_expiry_years = timeToExpiry(meta.expiry, currentTickTime);
+        if (T_to_expiry_years <= 0) {
+          // console.warn(`Skipping option tick for ${token}: Expired (TTE <= 0).`);
+          return null; // Option expired
+        }
+
+        // For options, 'F' is the forward price of the underlying.
+        // SmartAPI 'f' field might provide this for stock options, or it can be calculated.
+        forwardOrFuturePrice = (rawTick.f && (meta.instrumenttype === "OPTSTK" || meta.instrumenttype === "OPTIDX"))
+          ? parseFloat(rawTick.f) / 100
+          : spotPriceForCalc * Math.exp(RISK_FREE_RATE * T_to_expiry_years);
+
+        strike = Number(meta.strike); // Assuming meta.strike is already in correct units (not paisa)
+        optionType = meta.optionType || extractOptionType(meta.symbol); // Prefer meta.optionType
+
+        if (isNaN(strike) || !optionType) {
+            console.warn(`Skipping option ${token}: Invalid strike or optionType.`);
+            return null;
+        }
+        
+        // Use mid-price of best bid/ask for IV calculation if spread is reasonable
+        const bestBidRaw = rawTick.bp || rawTick.best_5_buy_data?.[0]?.price;
+        const bestAskRaw = rawTick.sp || rawTick.best_5_sell_data?.[0]?.price;
+        let marketPriceForIV = marketPriceLTP;
+
+        if (bestBidRaw && bestAskRaw) {
+            const bestBid = parseFloat(bestBidRaw) / 100;
+            const bestAsk = parseFloat(bestAskRaw) / 100;
+            if (bestBid > 0 && bestAsk > 0 && marketPriceForIV > 0 && (bestAsk - bestBid) / marketPriceForIV < 0.10) { // 10% spread check
+                marketPriceForIV = (bestBid + bestAsk) / 2;
+            }
+        }
+        
+        const calculatedIv = impliedVolBisection(marketPriceForIV, forwardOrFuturePrice, strike, T_to_expiry_years, RISK_FREE_RATE, optionType);
+        
+        if (!isNaN(calculatedIv) && isFinite(calculatedIv) && calculatedIv > 0.0001) { // Ensure IV is positive and valid
+          iv = calculatedIv; // Store as decimal
+          const calculatedGreeks = black76Greeks(forwardOrFuturePrice, strike, T_to_expiry_years, RISK_FREE_RATE, iv, optionType);
+          greeks = {
+            delta: parseFloat(calculatedGreeks.delta.toFixed(4)),
+            gamma: parseFloat(calculatedGreeks.gamma.toFixed(6)),
+            theta: parseFloat(calculatedGreeks.theta.toFixed(2)),
+            vega: parseFloat((calculatedGreeks.vega).toFixed(4)), // vega is often per 1% or 1 vol point
+                                                                  // if black76Greeks gives vega per 100% IV change, divide by 100 here.
+                                                                  // Assuming your black76Greeks.vega is for 1 unit of IV (e.g. 0.01 change)
+          };
+        } else {
+          // If IV calc fails, greeks remain null or default. IV remains null.
+        }
+
+      } else if (isFuture) {
+        forwardOrFuturePrice = marketPriceLTP; // For futures, its LTP is its current price (F)
+        T_to_expiry_years = timeToExpiry(meta.expiry, currentTickTime); // TTM for future
+        
+        // Simplified Greeks for Futures
+        greeks.delta = 1.0000; // Delta of a future is 1 per unit of underlying
+        greeks.gamma = 0.000000;
+        greeks.theta = 0.00;   // Simplified; can be non-zero due to cost of carry
+        greeks.vega = 0.00;    // Not sensitive to IV
+
+        // Fields not applicable to futures
+        strike = undefined;
+        optionType = undefined;
+        iv = undefined;
+      } else {
+        // console.warn(`Skipping tick for token ${token}: Unknown instrumenttype '${meta.instrumenttype}'.`);
+        return null; // Neither an option nor a future type we are explicitly handling
+      }
+
+      const bestBidRaw = rawTick.bp || rawTick.best_5_buy_data?.[0]?.price;
+      const bestAskRaw = rawTick.sp || rawTick.best_5_sell_data?.[0]?.price;
+
       return {
-        underlying: meta.symbol.startsWith("NIFTY") ? "NIFTY" : "BANKNIFTY",
-        assetType: "INDEX", // As per your original structure
+        underlying: underlyingName || meta.symbol, // Best guess for underlying
+        assetType: (meta.instrumenttype === "OPTIDX" || meta.instrumenttype === "FUTIDX") ? "INDEX" : "EQUITY", // Heuristic
         symbol: meta.symbol,
         token: token, 
-        instrumenttype: meta.instrumenttype, // e.g., "OPTIDX"
-        expiry: meta.expiry, // Original string 'DDMONYYYY'
-        strike: strike.toFixed(2),
-        optionType,
-        lastPrice: marketPriceLTP.toFixed(2), // LTP of the option
-        iv: (iv * 100).toFixed(2),
-        greeks: {
-          delta: parseFloat(greeks.delta.toFixed(4)),
-          gamma: parseFloat(greeks.gamma.toFixed(6)),
-          theta: parseFloat(greeks.theta.toFixed(2)),
-          vega: parseFloat((greeks.vega / 100).toFixed(2)), // Consistent with your example output
-        },
+        instrumenttype: meta.instrumenttype,
+        expiry: meta.expiry,
+        expiryDate: meta.expiryDate || meta.expiry, // Prefer standardized expiryDate if available in meta
+        strike: strike !== undefined ? strike.toFixed(2) : null, // Corrected: assuming strike in meta is already absolute
+        optionType: optionType,
+        lastPrice: marketPriceLTP.toFixed(2),
+        iv: iv !== null ? (iv * 100).toFixed(2) : null, // IV in percentage
+        greeks: greeks,
         marketData: {
-          spot: spotPrice ? parseFloat(spotPrice.toFixed(2)) : null,
-          futures: parseFloat(F.toFixed(2)), // This is the calculated F for this option
-          oi: parseInt(rawTick.oi || rawTick.open_interest || 0), // SmartAPI usually 'oi'
+          spot: spotPriceForCalc ? parseFloat(spotPriceForCalc.toFixed(2)) : null,
+          // For options, forwardOrFuturePrice is F. For futures, it's their LTP.
+          futures: forwardOrFuturePrice ? parseFloat(forwardOrFuturePrice.toFixed(2)) : null, 
+          oi: parseInt(rawTick.oi || rawTick.open_interest || 0),
           bidAsk: {
             bestBid: bestBidRaw ? (parseFloat(bestBidRaw)/100).toFixed(2) : "0.00",
             bestAsk: bestAskRaw ? (parseFloat(bestAskRaw)/100).toFixed(2) : "0.00",
-            spread: (bestBidRaw && bestAskRaw) ? ((parseFloat(bestAskRaw) - parseFloat(bestBidRaw))/100).toFixed(2) : "0.00",
+            spread: (bestBidRaw && bestAskRaw && parseFloat(bestAskRaw) > 0 && parseFloat(bestBidRaw) > 0) ? ((parseFloat(bestAskRaw) - parseFloat(bestBidRaw))/100).toFixed(2) : "0.00",
           },
-          depth: { // Using your processDepth
+          depth: {
             bids: processDepth(rawTick.best_5_buy_data), 
             asks: processDepth(rawTick.best_5_sell_data), 
           },
         },
         contractInfo: {
-          lotSize: parseInt(meta?.lotSize || meta?.lotsize || 50),
+          lotSize: parseInt(meta?.lotSize || meta?.lotsize || (meta.symbol.startsWith("NIFTY") ? 50 : meta.symbol.startsWith("BANKNIFTY") ? 15 : 1)),
           tickSize: parseFloat(meta?.tickSize || meta?.tick_size || 0.05),
           expiryType: getExpiryType(meta.expiry),
         },
-        // You can add rawTick.ft (feed timestamp) here if your transform function wants it
+        timeToExpiryDays: T_to_expiry_years !== null && !isNaN(T_to_expiry_years) ? (T_to_expiry_years * 365).toFixed(1) : null,
         // rawFeedTimestamp: rawTick.ft ? parseInt(rawTick.ft) : null 
       };
     } catch (error) {
-    //   console.error(`Error processing option tick for token ${rawTick?.tk || rawTick?.token}:`, error.message);
+      console.error(`Error in processInstrumentTick for token ${rawTick?.tk || rawTick?.token}:`, error.message, error.stack);
       return null;
     }
-  }
+}
 
   // Socket.IO setup (UNCHANGED)
   io.on("connection", (socket) => {

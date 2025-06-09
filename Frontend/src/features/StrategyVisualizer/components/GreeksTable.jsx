@@ -38,7 +38,7 @@ const GreeksTable = ({ projectedLegsData, totals,multiplier }) => {
             const direction = leg.buySell === 'Buy' ? 1 : -1;
             return (
               <tr key={leg.id}>
-                <td>{leg.instrument}</td>
+                <td>{leg.instrumentSymbolConcise}</td>
                 <td>{formatGreekValue(leg.projectedGreeks.delta * direction*multiplier, 2)}</td>
                 <td>{formatGreekValue(leg.projectedGreeks.gamma*multiplier, 4)}</td> {/* Gamma is usually displayed positive for the contract */}
                 <td>{formatGreekValue(leg.projectedGreeks.theta * direction*multiplier, 2)}</td>

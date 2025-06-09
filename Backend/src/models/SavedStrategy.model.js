@@ -29,6 +29,11 @@ const savedStrategySchema = new Schema(
         "Strategy must have at least one leg.",
       ],
     },
+    multiplier: {
+      type: Number,
+      required: [true, "Multiplier is required"],
+      default: 1, // Default multiplier for NIFTY/BANKNIFTY
+    },
     status: {
       type: String,
       enum: [

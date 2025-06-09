@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://strategy-visualizer.onrender.com/api/v1';
+const API_BASE_URL = 'http://localhost:5000/api/v1';
 
 export const saveStrategy = async (strategyData) => {
   const response = await fetch(`${API_BASE_URL}/strategies`, {
@@ -6,6 +6,7 @@ export const saveStrategy = async (strategyData) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(strategyData),
   });
+  console.log(strategyData)
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || 'Failed to save strategy');

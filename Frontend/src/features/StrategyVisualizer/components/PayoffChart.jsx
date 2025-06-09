@@ -1,104 +1,96 @@
 // src/features/StrategyVisualizer/components/PayoffChart.jsx
 import React, { useRef } from "react";
 import { Chart as ChartJS, registerables } from "chart.js";
-import { Chart } from "react-chartjs-2"; // Use this for rendering
+import { Chart } from "react-chartjs-2";
 import annotationPlugin from "chartjs-plugin-annotation";
-import { generatePayoffGraphData } from "../../utils/payoffChartUtils";
-
+import { generatePayoffGraphData } from "../../utils/payoffChartUtils"; // This utility needs to be legType-aware
+import { PAYOFF_GRAPH_POINTS, PAYOFF_GRAPH_INTERVAL_STEP } from "../../../config"; // Ensure these constants are defined
 ChartJS.register(...registerables, annotationPlugin);
 
 const PayoffChart = ({
-  strategyLegs,
-  niftyTargetString, // Used as fallback if slider is invalid
-  displaySpotForSlider, // THIS IS THE PRIMARY CONTROLLER for the chart's center
+  strategyLegs, // Existing (will contain legType)
+  niftyTargetString,
+  displaySpotForSlider,
   targetDateISO,
   riskFreeRate,
-  getScenarioIV,
-  getOptionByToken,
+  getScenarioIV, // For options
+  getInstrumentByToken, // MODIFIED: Was getOptionByToken
   targetInterval,
-  underlyingSpotPrice, // Actual market spot (can be different from slider)
+  underlyingSpotPrice,
   showPercentage,
   sdDays,
-  fullOptionChainData, // This prop IS A MAP initially
-  PAYOFF_GRAPH_POINTS, // Pass these if they are props of PayoffChart
-  PAYOFF_GRAPH_INTERVAL_STEP, // Pass these if they are props of PayoffChart
-  multiplier = 1, // Default to 1 if not provided
+  fullInstrumentChainData, // MODIFIED: Was fullOptionChainData, expects array of all instruments
+  multiplier = 1,
 }) => {
-  const chartRef = useRef(null);
+  const chartRef = useRef(null); // Keep for potential direct chart interactions
 
-  let optionChainArray = [];
-  if (fullOptionChainData instanceof Map) {
-    optionChainArray = Array.from(fullOptionChainData.values());
-  } else if (Array.isArray(fullOptionChainData)) {
-    optionChainArray = fullOptionChainData;
-    if (optionChainArray.length > 0) {
-      const firstElement = optionChainArray[0];
-      if (
-        Array.isArray(firstElement) &&
-        firstElement.length === 2 &&
-        firstElement[1] &&
-        typeof firstElement[1] === "object" &&
-        "strike" in firstElement[1]
-      ) {
-        optionChainArray = optionChainArray.map((entry) => entry[1]);
-      } else if (
-        !(
-          typeof firstElement === "object" &&
-          firstElement !== null &&
-          "strike" in firstElement
-        )
-      ) {
-        console.warn(
-          "PayoffChart: fullOptionChainData is an array, but elements don't look like option objects."
-        );
-        optionChainArray = []; // Clear if format is wrong
-      }
-    }
-  } else if (fullOptionChainData) {
+  // MODIFIED: Process fullInstrumentChainData (which should be an array from PayoffChartSection)
+  // This logic is a safeguard; ideally, PayoffChartSection passes a clean array.
+  let instrumentArray = [];
+  if (Array.isArray(fullInstrumentChainData)) {
+    instrumentArray = fullInstrumentChainData;
+    // The complex Map/Array[Array] check from your paste-2.txt might be less necessary
+    // if liveInstrumentChainArray from context is consistently an array of instrument objects.
+    // Let's simplify: if it's an array, assume it's the correct array of instruments.
+  } else if (fullInstrumentChainData instanceof Map) {
+    // Fallback if a Map is somehow passed
     console.warn(
-      "PayoffChart: fullOptionChainData received is neither a Map nor an Array. OI data will be missing.",
-      typeof fullOptionChainData
+      "PayoffChart: fullInstrumentChainData received as Map, converting to array. Should be array."
+    );
+    instrumentArray = Array.from(fullInstrumentChainData.values());
+  } else if (fullInstrumentChainData) {
+    console.warn(
+      "PayoffChart: fullInstrumentChainData received is neither an Array nor a Map. OI data might be missing or incorrect.",
+      typeof fullInstrumentChainData
     );
   }
 
+  // MODIFIED: Call to generatePayoffGraphData now passes getInstrumentByToken
+  // and the processed instrumentArray as 'fullOptionChainData' (utility prop name)
   const { points, sdBands } = generatePayoffGraphData({
     strategyLegs,
     niftyTargetString,
-    displaySpotForSlider, // This drives the center of calculations
+    displaySpotForSlider,
     targetDateISO,
     riskFreeRate,
-    getScenarioIV,
-    getOptionByToken,
+    getScenarioIV, // For options
+    getInstrumentByToken, // MODIFIED: Pass new generic getter (utility expects getOptionByToken name)
     targetInterval,
     PAYOFF_GRAPH_POINTS,
     PAYOFF_GRAPH_INTERVAL_STEP,
-    underlyingSpotPrice, // Pass the actual market spot if needed for specific P&L % base elsewhere
+    underlyingSpotPrice,
     showPercentage,
     sdDays,
-    fullOptionChainData: optionChainArray,
+    fullOptionChainData: instrumentArray, // MODIFIED: Pass the processed array
   });
-
+//  console.log(points, sdBands); // << DEBUG: Log points and sdBands for verification
   if (!points || points.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "20px", minHeight: 350 }}>
-        No data to display. Check inputs or console.
+        No payoff data to display. Check inputs or console.
       </div>
     );
   }
 
-  // For linear axis, labels are the numerical x-values
-  const chartLabels = points.map((pt) => pt.spot);
+  const chartLabels = points.map((pt) => pt.spot); // x-values
 
-  // Data for datasets should be an array of y-values corresponding to chartLabels
+  // Data for datasets
+  // P&L values already incorporate the strategy multiplier if done in generatePayoffGraphData,
+  // OR apply multiplier here if generatePayoffGraphData returns unscaled P&L.
+  // Assuming generatePayoffGraphData returns unscaled P&L for flexibility, apply multiplier here.
   const expiryData = points.map((pt) =>
-    showPercentage ? pt.pnlAtExpiryPct : pt.pnlAtExpiry
+    showPercentage
+      ? pt.pnlAtExpiryPct * multiplier
+      : pt.pnlAtExpiry * multiplier
   );
   const targetData = points.map((pt) =>
-    showPercentage ? pt.pnlAtTargetDatePct : pt.pnlAtTargetDate
+    showPercentage
+      ? pt.pnlAtTargetDatePct * multiplier
+      : pt.pnlAtTargetDate * multiplier
   );
-  const callOIData = points.map((pt) => pt.callOI || 0); // Ensure 0 if undefined
-  const putOIData = points.map((pt) => pt.putOI || 0); // Ensure 0 if undefined
-  console.log(callOIData, putOIData);
+
+  const callOIData = points.map((pt) => pt.callOI || 0);
+  const putOIData = points.map((pt) => pt.putOI || 0);
   const hasOIData =
     callOIData.some((oi) => oi > 0) || putOIData.some((oi) => oi > 0);
 
@@ -108,26 +100,26 @@ const PayoffChart = ({
       {
         type: "bar",
         label: "Call OI",
-        data: points.map((p) => ({ x: p.spot, y: p.callOI || 0 })), // Use {x,y} for linear axis bars
-        backgroundColor: "rgba(255, 99, 132, 0.6)", // Reddish for Call
+        data: points.map((p) => ({ x: p.spot, y: p.callOI || 0 })),
+        backgroundColor: "rgba(255, 99, 132, 0.6)",
         borderColor: "rgb(255, 86, 123)",
-        borderWidth: 5,
+        borderWidth: 1,
         yAxisID: "yOI",
-        order: 2,
+        order: 3,
         barPercentage: 0.4,
-        categoryPercentage: 0.9, // Adjust for grouped appearance
+        categoryPercentage: 0.9,
       },
       {
         type: "bar",
         label: "Put OI",
-        data: points.map((p) => ({ x: p.spot, y: p.putOI || 0 })), // Use {x,y} for linear axis bars
-        backgroundColor: "rgba(75, 192, 192, 0.6)", // Greenish for Put
+        data: points.map((p) => ({ x: p.spot, y: p.putOI || 0 })),
+        backgroundColor: "rgba(75, 192, 192, 0.6)",
         borderColor: "rgb(52, 255, 62)",
-        borderWidth: 5,
+        borderWidth: 1,
         yAxisID: "yOI",
-        order: 2,
+        order: 3,
         barPercentage: 0.4,
-        categoryPercentage: 0.9, // Adjust for grouped appearance
+        categoryPercentage: 0.9,
       }
     );
   }
@@ -138,8 +130,10 @@ const PayoffChart = ({
       label: "P&L at Expiry",
       data: points.map((p) => ({
         x: p.spot,
-        y: showPercentage ? p.pnlAtExpiryPct*multiplier : p.pnlAtExpiry*multiplier,
-      })), // Use {x,y}
+        y: showPercentage
+          ? p.pnlAtExpiryPct * multiplier
+          : p.pnlAtExpiry * multiplier,
+      })),
       borderColor: "#43a047",
       borderWidth: 2,
       pointRadius: 0,
@@ -156,9 +150,11 @@ const PayoffChart = ({
       label: "P&L at Target Date",
       data: points.map((p) => ({
         x: p.spot,
-        y: showPercentage ? p.pnlAtTargetDatePct*multiplier : p.pnlAtTargetDate*multiplier,
-      })), // Use {x,y}
-      borderColor: "rgb(58, 84, 255)", // Red for Target Date P&L
+        y: showPercentage
+          ? p.pnlAtTargetDatePct * multiplier
+          : p.pnlAtTargetDate * multiplier,
+      })),
+      borderColor: "rgb(58, 84, 255)",
       borderWidth: 2,
       borderDash: [6, 3],
       pointRadius: 0,
@@ -168,54 +164,50 @@ const PayoffChart = ({
         borderColor: (ctx) => (ctx.p1.raw.y >= 0 ? "#1976d2" : "#d32f2f"),
       },
       yAxisID: "yPnL",
-      order: 1,
+      order: 2, // Ensure target P&L line is drawn after expiry P&L
     }
   );
 
-  const chartData = {
-    // For linear x-axis, labels are not strictly needed if data is {x,y} objects
-    // However, Chart.js might still use them for tooltips if not customized
-    // labels: chartLabels,
-    datasets,
-  };
+  const chartData = { datasets }; // labels are implicitly handled by {x,y} data
 
-  // sdBands.center is the spot value from slider/target around which bands were calculated
   const centerForSpotAnnotation = sdBands
     ? sdBands.center
     : parseFloat(displaySpotForSlider) ||
       parseFloat(niftyTargetString) ||
       underlyingSpotPrice ||
       0;
-
-  // Find P&L at the centerForSpotAnnotation for the label
   let pnlAtCenterForAnnotation = 0;
+  // Find the P&L value at the center spot for the annotation label
   const centerPointData = points.find(
-    (p) => Math.abs(p.spot - centerForSpotAnnotation) < 0.001
-  );
+    (p) =>
+      Math.abs(p.spot - centerForSpotAnnotation) < (targetInterval * 0.1 || 1)
+  ); // Tolerance for finding point
   if (centerPointData) {
+    // Use P&L at Expiry for the main annotation label, as it's generally the primary focus
     pnlAtCenterForAnnotation = showPercentage
-      ? centerPointData.pnlAtExpiryPct
-      : centerPointData.pnlAtExpiry;
+      ? centerPointData.pnlAtExpiryPct * multiplier
+      : centerPointData.pnlAtExpiry * multiplier;
   }
 
   const scalesConfig = {
+    /* ... (existing scalesConfig from your paste-2.txt, ensure yPnL and yOI are correctly defined) ... */
     x: {
       title: { display: true, text: "Spot / Strike Price" },
-      type: "linear", // CRITICAL for annotations at precise values
+      type: "linear",
       min:
         points.length > 0 ? Math.min(...points.map((p) => p.spot)) : undefined,
       max:
         points.length > 0 ? Math.max(...points.map((p) => p.spot)) : undefined,
-      ticks: {
-        // autoSkip: true, // May not be needed for linear
-        // maxTicksLimit: 10 // Adjust for density
-        // Consider using a callback for formatting if needed
-      },
     },
     yPnL: {
       type: "linear",
       position: "left",
-      title: { display: true, text: showPercentage ? "P&L (%)" : "P&L (₹)" },
+      title: {
+        display: true,
+        text: showPercentage
+          ? `P&L (%) x ${multiplier}`
+          : `P&L (₹) x ${multiplier}`,
+      },
       grid: { drawOnChartArea: true },
     },
   };
@@ -227,7 +219,6 @@ const PayoffChart = ({
       grid: { drawOnChartArea: false },
       ticks: {
         callback: function (value) {
-          /* ... K/M formatting ... */
           if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
           if (value >= 1000) return (value / 1000).toFixed(0) + "K";
           return value;
@@ -237,8 +228,10 @@ const PayoffChart = ({
     };
   }
 
-  const annotationsObject = {};
+  const annotationsObject =
+    {}; /* ... (existing annotation logic from your paste-2.txt, ensure sdBands and centerForSpotAnnotation are correctly used) ... */
   if (sdBands && typeof sdBands.minus2SD === "number") {
+    // SD Bands
     annotationsObject.minus2SD = {
       type: "line",
       scaleID: "x",
@@ -312,6 +305,7 @@ const PayoffChart = ({
     typeof centerForSpotAnnotation === "number" &&
     centerForSpotAnnotation > 0
   ) {
+    // Current Spot/Target Annotation
     annotationsObject.currentSpotLine = {
       type: "line",
       scaleID: "x",
@@ -336,6 +330,7 @@ const PayoffChart = ({
   }
 
   const options = {
+    /* ... (existing options object from your paste-2.txt, ensure tooltip and legend are fine) ... */
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
@@ -344,20 +339,17 @@ const PayoffChart = ({
       tooltip: {
         callbacks: {
           title: function (tooltipItems) {
-            // For linear axis, tooltipItems[0].parsed.x gives the numerical value
             return `Spot/Strike: ${tooltipItems[0].parsed.x.toFixed(2)}`;
           },
           label: function (context) {
-            /* ... same as before ... */
             const datasetLabel = context.dataset.label || "";
             const value = context.parsed.y;
-            if (datasetLabel.includes("OI")) {
+            if (datasetLabel.includes("OI"))
               return `${datasetLabel}: ${
                 value !== null && value !== undefined
                   ? value.toLocaleString()
                   : "N/A"
               }`;
-            }
             return `${datasetLabel}: ${
               value !== null && value !== undefined ? value.toFixed(2) : "N/A"
             }`;
@@ -370,15 +362,13 @@ const PayoffChart = ({
           : undefined,
     },
     scales: scalesConfig,
-    elements: {
-      line: { borderWidth: 2, tension: 0.1 },
-      point: { radius: 0 },
-    },
+    elements: { line: { borderWidth: 2, tension: 0.1 }, point: { radius: 0 } },
   };
 
   return (
     <div style={{ minHeight: 350, maxHeight: 500, width: "100%" }}>
-      <Chart type="bar" data={chartData} options={options} />
+      {/* Ensure type="bar" is correct if you intend mixed chart, or adjust if only line charts are primary */}
+      <Chart type="bar" ref={chartRef} data={chartData} options={options} />
     </div>
   );
 };

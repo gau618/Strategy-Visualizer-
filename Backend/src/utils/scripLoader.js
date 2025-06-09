@@ -48,25 +48,111 @@ export function normalizeExpiry(expiryStr) {
   
   return `${year}-${months[month.toUpperCase()]}-${day.padStart(2, '0')}`;
 }
-export function buildTokenMetaMap(optionChain) {
-  const map = {};
-  const pattern = /^(NIFTY|BANKNIFTY)(\d{2})([A-Z]+)(\d{2})(\d+)([CP]E)$/i;
+// Helper function to extract CE/PE from symbol (if not directly available in scrip object)
+// This is a simplified version; complex symbols might need more robust parsing.
+function extractOptionTypeFromSymbol(symbol) {
+  if (!symbol || typeof symbol !== "string") return null;
+  const lastTwo = symbol.slice(-2).toUpperCase();
+  if (lastTwo === "CE" || lastTwo === "PE") {
+    return lastTwo;
+  }
+  // Add more sophisticated regex if your option symbols don't end with CE/PE directly
+  // e.g., if it's embedded like NIFTY2460322500CE
+  const matchCE = symbol.match(/CE$/i);
+  if (matchCE) return "CE";
+  const matchPE = symbol.match(/PE$/i);
+  if (matchPE) return "PE";
+  return null;
+}
 
-  optionChain.forEach(scrip => {
-    const match = scrip.symbol.match(pattern);
-    if (!match) return;
-    const [, day, month, year, strike, optionType] = match;
+export function buildTokenMetaMap(instrumentMasterList) { // Renamed parameter for clarity
+  const map = {};
+  // This regex is specific to certain NFO option symbol formats.
+  // Example: NIFTY27JUN2423000CE (DayMonthYearStrikeOptType)
+  // It might not be universally applicable to all symbol formats or brokers.
+  // Prefer direct fields from scripData if available (scrip.strike, scrip.optionType).
+  const optionSymbolPattern = /^(NIFTY|BANKNIFTY|FINNIFTY|MIDCPNIFTY|[A-Z&+-]+)(\d{2})([A-Z]{3})(\d{2})(\d+)([CP]E)$/i;
+  // For NIFTY, BANKNIFTY, etc. The first group ([A-Z&+-]+) is made more generic for other underlyings.
+
+  if (!Array.isArray(instrumentMasterList)) {
+    console.error("buildTokenMetaMap: Expected instrumentMasterList to be an array, received:", typeof instrumentMasterList);
+    return map;
+  }
+
+  instrumentMasterList.forEach(scrip => {
+    // Basic validation for essential scrip fields
+    if (!scrip || !scrip.token || !scrip.symbol || !scrip.instrumenttype || !scrip.expiry || scrip.lotsize === undefined || scrip.tick_size === undefined) {
+      // console.warn("Skipping scrip due to missing essential fields:", scrip?.symbol || scrip?.token || "Unknown scrip");
+      return;
+    }
+
     const tokenKey = String(scrip.token).replace(/"/g, '').trim();
-    map[tokenKey] = {
+    
+    // Attempt to determine underlying symbol (this depends heavily on your scripData structure)
+    // For NIFTY/BANKNIFTY options/futures, scrip.name might be 'NIFTY', 'BANKNIFTY'.
+    // Or, it might be the full symbol, requiring parsing.
+    let underlyingSymbol = scrip.name; // Assume scrip.name is the underlying (e.g., "NIFTY", "RELIANCE")
+    if (scrip.symbol.startsWith("NIFTY")) underlyingSymbol = "NIFTY";
+    else if (scrip.symbol.startsWith("BANKNIFTY")) underlyingSymbol = "BANKNIFTY";
+    else if (scrip.symbol.startsWith("FINNIFTY")) underlyingSymbol = "FINNIFTY";
+    else if (scrip.symbol.startsWith("MIDCPNIFTY")) underlyingSymbol = "MIDCPNIFTY";
+    // For stock derivatives, scrip.name might be the stock code.
+
+    const baseMeta = {
       token: tokenKey,
       symbol: scrip.symbol,
-      expiry: scrip.expiry,
-      strike: parseInt(scrip.strike/100),
-      optionType: extractOptionType(scrip.symbol),
+      expiry: scrip.expiry, // Expiry date string from scrip data
       instrumenttype: scrip.instrumenttype,
       lotSize: parseInt(scrip.lotsize),
-      tickSize: parseFloat(scrip.tick_size)
+      tickSize: parseFloat(scrip.tick_size),
+      underlying_symbol: underlyingSymbol, // Name of the base underlying index/stock
+      name: scrip.name // Original name field from scrip
     };
+
+    if (isNaN(baseMeta.lotSize)) {
+      console.warn(`Invalid lotSize for ${scrip.symbol}: ${scrip.lotsize}. Using fallback.`);
+      baseMeta.lotSize = scrip.symbol?.includes("BANKNIFTY") ? 15 : (scrip.symbol?.includes("FINNIFTY") ? 40 : (scrip.symbol?.includes("NIFTY") ? 50 : 1) );
+    }
+    if (isNaN(baseMeta.tickSize)) {
+      console.warn(`Invalid tickSize for ${scrip.symbol}: ${scrip.tick_size}. Using fallback.`);
+      baseMeta.tickSize = 0.05;
+    }
+
+
+    if (scrip.instrumenttype === "OPTIDX" || scrip.instrumenttype === "OPTSTK") {
+      // It's an Option
+      let strikePrice = scrip.strike !== undefined ? parseFloat(scrip.strike) / 100 : NaN; // Assuming strike is in paisa
+      let optionType = scrip.optionType || extractOptionTypeFromSymbol(scrip.symbol);
+
+      // If strike or optionType couldn't be determined from direct fields, try parsing symbol
+      if (isNaN(strikePrice) || !optionType) {
+        const match = scrip.symbol.match(optionSymbolPattern);
+        if (match) {
+          if (isNaN(strikePrice) && match[5]) { // 5th group is strike in your example regex
+            strikePrice = parseInt(match[5]); // Assuming strike in symbol is absolute value
+          }
+          if (!optionType && match[6]) { // 6th group is option type
+            optionType = match[6].toUpperCase();
+          }
+        }
+      }
+      
+      map[tokenKey] = {
+        ...baseMeta,
+        strike: !isNaN(strikePrice) ? strikePrice : null,
+        optionType: optionType || null,
+      };
+
+    } else if (scrip.instrumenttype === "FUTIDX" || scrip.instrumenttype === "FUTSTK") {
+      // It's a Future
+      map[tokenKey] = {
+        ...baseMeta,
+        strike: null,     // Futures don't have a strike price
+        optionType: null, // Futures don't have an option type (CE/PE)
+      };
+    } else {
+      // console.warn(`Unknown or unhandled instrument type '${scrip.instrumenttype}' for symbol '${scrip.symbol}'. Skipping.`);
+    }
   });
   return map;
 }

@@ -3,14 +3,20 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import StrategyTabs from "../components/StrategyTabs";
 import Button from "../../../components/Button/Button";
 import Select from "../../../components/Select/Select";
+import ToggleButtonGroup from "../../../components/ToggleButtonGroup/ToggleButtonGroup";
+
+// MODIFIED: Import new definitions
 import {
-  STRATEGY_DEFINITIONS,
-  STRATEGY_CATEGORIES,
+  OPTION_STRATEGY_DEFINITIONS,
+  OPTION_STRATEGY_CATEGORIES,
+  FUTURE_STRATEGY_DEFINITIONS,
+  FUTURE_STRATEGY_CATEGORIES,
 } from "../data/strategyDefinitions";
 import { findStrikeByOffsetSteps } from "../../utils/strategyUtils";
 import "./ReadyMadeStrategiesSection.scss";
 import { DEFAULT_VOLATILITY } from "../../../config";
 
+// Helper to format expiry display
 const formatDisplayExpiry = (expiryDDMMMYYYY) => {
   if (
     !expiryDDMMMYYYY ||
@@ -21,23 +27,34 @@ const formatDisplayExpiry = (expiryDDMMMYYYY) => {
   try {
     const day = expiryDDMMMYYYY.substring(0, 2);
     const monthStr = expiryDDMMMYYYY.substring(2, 5).toUpperCase();
-    const year = expiryDDMMMYYYY.substring(5, 9);
+    const yearSubstring = expiryDDMMMYYYY.substring(5);
+    const year =
+      yearSubstring.length === 2 ? `20${yearSubstring}` : yearSubstring;
     if (day && monthStr && year && year.length === 4)
       return `${day} ${monthStr} ${year}`;
-  } catch (e) {
-    /* fallback */
-  }
+  } catch (e) {}
   return expiryDDMMMYYYY;
 };
+
+// Helper to get leg summary display, handles both option and future legs
 const getLegSummaryDisplay = (leg) => {
   if (!leg) return "N/A";
   const action =
     leg.buySell === "Buy" ? "B" : leg.buySell === "Sell" ? "S" : leg.buySell;
   const price = typeof leg.price === "number" ? leg.price.toFixed(2) : "-";
-  return `${action} ${leg.lots || 1}x ${leg.strike || "STK"}${
-    leg.optionType || "OPT"
-  } @ ${price}`;
+  if (leg.legType === "option") {
+    return `${action} ${leg.lots || 1}x ${leg.strike || "STK"}${
+      leg.optionType || "OPT"
+    } @ ${price}`;
+  } else if (leg.legType === "future") {
+    return `${action} ${leg.lots || 1}x ${
+      leg.instrumentSymbol || "Future"
+    } @ ${price}`;
+  }
+  return "N/A";
 };
+
+// Icon components
 const IconLoadToBuilder = () => (
   <span className="action-icon icon-load" title="Load to Builder">
     ↗️
@@ -60,9 +77,8 @@ const ReadyMadeStrategiesSection = ({
   activeMainTab,
   onMainTabChange,
   currentUnderlying,
-  liveOptionChainMap,
-  getOptionsByUnderlying,
-  getOptionByToken,
+  getTradableInstrumentsByUnderlying,
+  getInstrumentByToken,
   underlyingSpotPrice,
   onLoadStrategyLegs,
   userPositions,
@@ -70,11 +86,28 @@ const ReadyMadeStrategiesSection = ({
   draftStrategies,
   isLoadingTabData,
 }) => {
-  const [activeFilter, setActiveFilter] = useState(STRATEGY_CATEGORIES[0]);
-  const [selectedExpiry, setSelectedExpiry] = useState("");
-  const [availableExpiries, setAvailableExpiries] = useState([]);
+  // State to toggle between "Options" and "Futures" for ready-made strategies
+  const [readyMadeType, setReadyMadeType] = useState("options");
+
+  // State for the active category filter (e.g., 'Bullish', 'Directional')
+  const [activeStrategyCategoryFilter, setActiveStrategyCategoryFilter] =
+    useState(
+      OPTION_STRATEGY_CATEGORIES[0] // Initialize with the first option category
+    );
+
+  // State for option expiry selection
+  const [selectedOptionExpiry, setSelectedOptionExpiry] = useState("");
+  const [availableOptionExpiries, setAvailableOptionExpiries] = useState([]);
+
+  // NEW: State for selecting future contract series from a dropdown
+  const [selectedFutureContractToken, setSelectedFutureContractToken] =
+    useState("");
+  const [availableFutureContracts, setAvailableFutureContracts] = useState([]);
+
+  // State for searching saved items
   const [searchTermSaved, setSearchTermSaved] = useState("");
 
+  // Main tabs definition
   const mainTabs = useMemo(
     () => [
       { id: "readymade", label: "Ready-made" },
@@ -86,27 +119,44 @@ const ReadyMadeStrategiesSection = ({
     []
   );
 
+  // useEffect to populate EITHER option expiries OR future contracts based on readyMadeType
   useEffect(() => {
+    // Guard: Only proceed if in "readymade" tab and underlying/data functions are available
     if (
-      activeMainTab === "readymade" &&
-      currentUnderlying &&
-      getOptionsByUnderlying
+      activeMainTab !== "readymade" ||
+      !currentUnderlying ||
+      !getTradableInstrumentsByUnderlying
     ) {
-      const options = getOptionsByUnderlying(currentUnderlying);
-      if (!options || options.length === 0) {
-        setAvailableExpiries([]);
-        setSelectedExpiry("");
+      setAvailableOptionExpiries([]);
+      setSelectedOptionExpiry("");
+      setAvailableFutureContracts([]);
+      setSelectedFutureContractToken("");
+      return;
+    }
+
+    const instruments = getTradableInstrumentsByUnderlying(currentUnderlying);
+
+    if (readyMadeType === "options") {
+      const options = instruments?.options || [];
+      if (!options.length) {
+        setAvailableOptionExpiries([]);
+        setSelectedOptionExpiry("");
         return;
       }
+      // Sort and map option expiries for the dropdown
       const uniqueExpiries = [...new Set(options.map((o) => o.expiry))].sort(
         (a, b) => {
           try {
             const dA = new Date(
-                a.replace(/(\d{2})([A-Z]{3})(\d{4})/, "$2 $1, $3")
-              ),
-              dB = new Date(b.replace(/(\d{2})([A-Z]{3})(\d{4})/, "$2 $1, $3"));
+              a.replace(/(\d{2})([A-Z]{3})(\d{4})/, "$2 $1, $3")
+            );
+            const dB = new Date(
+              b.replace(/(\d{2})([A-Z]{3})(\d{4})/, "$2 $1, $3")
+            );
             if (!isNaN(dA) && !isNaN(dB)) return dA.getTime() - dB.getTime();
-          } catch (e) {}
+          } catch (e) {
+            /* no-op */
+          }
           return a.localeCompare(b);
         }
       );
@@ -114,145 +164,334 @@ const ReadyMadeStrategiesSection = ({
         label: formatDisplayExpiry(exp),
         value: exp,
       }));
-      setAvailableExpiries(expiryOpts);
+      setAvailableOptionExpiries(expiryOpts);
+      // Set default selected option expiry
       if (
         expiryOpts.length > 0 &&
-        (!selectedExpiry || !expiryOpts.find((o) => o.value === selectedExpiry))
+        (!selectedOptionExpiry ||
+          !expiryOpts.find((o) => o.value === selectedOptionExpiry))
       ) {
-        setSelectedExpiry(expiryOpts[0].value);
+        setSelectedOptionExpiry(expiryOpts[0].value);
       } else if (expiryOpts.length === 0) {
-        setSelectedExpiry("");
+        setSelectedOptionExpiry("");
       }
+      // Clear future selection when switching to options
+      setAvailableFutureContracts([]);
+      setSelectedFutureContractToken("");
+    } else if (readyMadeType === "futures") {
+      const futures = instruments?.futures || []; // Futures should be pre-sorted by expiry from context
+      if (!futures.length) {
+        setAvailableFutureContracts([]);
+        setSelectedFutureContractToken("");
+        return;
+      }
+      // Map future contracts for the dropdown
+      const futureOpts = futures.map((fut) => ({
+        label:
+          fut.instrumentSymbol ||
+          `${currentUnderlying} ${formatDisplayExpiry(
+            fut.expiryDate || fut.expiry
+          )} FUT`,
+        value: fut.token, // The value of the select option is the future's token
+      }));
+      setAvailableFutureContracts(futureOpts);
+      // Set default selected future contract (e.g., the nearest month)
+      if (
+        futureOpts.length > 0 &&
+        (!selectedFutureContractToken ||
+          !futureOpts.find((f) => f.value === selectedFutureContractToken))
+      ) {
+        setSelectedFutureContractToken(futureOpts[0].value);
+      } else if (futureOpts.length === 0) {
+        setSelectedFutureContractToken("");
+      }
+      // Clear option selection when switching to futures
+      setAvailableOptionExpiries([]);
+      setSelectedOptionExpiry("");
     }
   }, [
     activeMainTab,
     currentUnderlying,
-    getOptionsByUnderlying,
-    liveOptionChainMap,
-    selectedExpiry,
+    getTradableInstrumentsByUnderlying,
+    readyMadeType,
+    selectedOptionExpiry,
+    selectedFutureContractToken,
   ]);
 
-  const filteredReadyMadeStrategies = useMemo(
+  // Dynamically get strategy definitions and categories based on readyMadeType
+  const currentStrategyDefinitions = useMemo(
     () =>
-      activeMainTab === "readymade"
-        ? STRATEGY_DEFINITIONS.filter((s) => s.category === activeFilter)
-        : [],
-    [activeMainTab, activeFilter]
+      readyMadeType === "options"
+        ? OPTION_STRATEGY_DEFINITIONS
+        : FUTURE_STRATEGY_DEFINITIONS,
+    [readyMadeType]
+  );
+  const currentStrategyCategories = useMemo(
+    () =>
+      readyMadeType === "options"
+        ? OPTION_STRATEGY_CATEGORIES
+        : FUTURE_STRATEGY_CATEGORIES,
+    [readyMadeType]
   );
 
+  // Reset active category filter when the type of strategies (Options/Futures) changes
+  useEffect(() => {
+    if (currentStrategyCategories && currentStrategyCategories.length > 0) {
+      setActiveStrategyCategoryFilter(currentStrategyCategories[0]);
+    } else {
+      setActiveStrategyCategoryFilter(""); // Handle cases where categories might be empty
+    }
+  }, [currentStrategyCategories]); // This effect runs when currentStrategyCategories changes
+
+  // Filter strategies based on the active category
+  const filteredReadyMadeStrategies = useMemo(
+    () =>
+      activeMainTab === "readymade" && activeStrategyCategoryFilter
+        ? currentStrategyDefinitions.filter(
+            (s) => s.category === activeStrategyCategoryFilter
+          )
+        : [],
+    [activeMainTab, currentStrategyDefinitions, activeStrategyCategoryFilter]
+  );
+
+  // Callback to handle selection of a ready-made strategy template
   const handleSelectReadyMadeStrategy = useCallback(
     async (strategyTemplate) => {
-      if (
-        !selectedExpiry ||
-        underlyingSpotPrice === null ||
-        underlyingSpotPrice === undefined ||
-        !liveOptionChainMap ||
-        !currentUnderlying
-      ) {
-        alert("Market data (expiry/spot) missing.");
-        return;
-      }
-      if (strategyTemplate.requiresDifferentExpiries) {
-        alert(
-          `"${strategyTemplate.name}" requires manual setup for different expiries.`
-        );
-        return;
-      }
-      const optionsForSelectedExpiry = Array.from(
-        liveOptionChainMap.values()
-      ).filter(
-        (o) => o.underlying === currentUnderlying && o.expiry === selectedExpiry
-      );
-      if (!optionsForSelectedExpiry.length) {
-        alert(
-          `No options for ${currentUnderlying} on ${formatDisplayExpiry(
-            selectedExpiry
-          )}.`
-        );
-        return;
-      }
-      const availableStrikes = [
-        ...new Set(optionsForSelectedExpiry.map((o) => Number(o.strike))),
-      ].sort((a, b) => a - b);
-      if (!availableStrikes.length) {
-        alert(
-          `No strikes for ${currentUnderlying} on ${formatDisplayExpiry(
-            selectedExpiry
-          )}.`
-        );
+      if (!currentUnderlying || !getTradableInstrumentsByUnderlying) {
+        alert("Underlying not set or market data access unavailable.");
         return;
       }
 
+      const instruments = getTradableInstrumentsByUnderlying(currentUnderlying);
       const newLegs = [];
       let errorOccurred = false;
+
       for (const legDef of strategyTemplate.legs) {
-        const targetStrike = findStrikeByOffsetSteps(
-          underlyingSpotPrice,
-          availableStrikes,
-          legDef.strikeOffsetSteps,
-          currentUnderlying
-        );
-        if (targetStrike === null) {
-          alert(
-            `Could not determine strike for a leg in "${strategyTemplate.name}".`
+        if (legDef.legType === "option") {
+          // --- Option Leg Construction ---
+          if (
+            !selectedOptionExpiry ||
+            underlyingSpotPrice === null ||
+            underlyingSpotPrice === undefined
+          ) {
+            alert(
+              "Option expiry or spot price missing for constructing option leg."
+            );
+            errorOccurred = true;
+            break;
+          }
+
+          // Simplified handling for multi-expiry option strategies like calendars
+          let legExpiry = selectedOptionExpiry; // Default to selected expiry
+          if (
+            strategyTemplate.requiresDifferentExpiries &&
+            legDef.expirySelector
+          ) {
+            if (legDef.expirySelector === "NEXT_AVAILABLE") {
+              const optionExpiries = (instruments?.options || [])
+                .map((o) => o.expiry)
+                .sort(
+                  (a, b) =>
+                    new Date(
+                      a.replace(/(\d{2})([A-Z]{3})(\d{4})/, "$2 $1, $3")
+                    ) -
+                    new Date(b.replace(/(\d{2})([A-Z]{3})(\d{4})/, "$2 $1, $3"))
+                );
+              const currentIdx = optionExpiries.indexOf(selectedOptionExpiry);
+              if (currentIdx !== -1 && currentIdx + 1 < optionExpiries.length) {
+                legExpiry = optionExpiries[currentIdx + 1];
+              } else {
+                alert(
+                  `Cannot find "NEXT_AVAILABLE" expiry for leg in "${strategyTemplate.name}". Using selected expiry.`
+                );
+                // Fallback to selectedOptionExpiry or handle error
+              }
+            }
+            // 'SELECTED' case uses selectedOptionExpiry by default
+          }
+
+          const optionsForLegExpiry = (instruments?.options || []).filter(
+            (o) => o.expiry === legExpiry
           );
-          errorOccurred = true;
-          break;
-        }
-        const optionData = optionsForSelectedExpiry.find(
-          (o) =>
-            Number(o.strike) === targetStrike &&
-            o.optionType === legDef.optionType
-        );
-        if (!optionData) {
-          alert(
-            `Option leg ${targetStrike}${legDef.optionType} not found for "${strategyTemplate.name}".`
+          if (!optionsForLegExpiry.length) {
+            alert(
+              `No options for ${currentUnderlying} on ${formatDisplayExpiry(
+                legExpiry
+              )}.`
+            );
+            errorOccurred = true;
+            break;
+          }
+          const availableStrikes = [
+            ...new Set(optionsForLegExpiry.map((o) => Number(o.strike))),
+          ].sort((a, b) => a - b);
+          if (!availableStrikes.length) {
+            alert(
+              `No strikes for ${currentUnderlying} on ${formatDisplayExpiry(
+                legExpiry
+              )}.`
+            );
+            errorOccurred = true;
+            break;
+          }
+
+          const targetStrike = findStrikeByOffsetSteps(
+            underlyingSpotPrice,
+            availableStrikes,
+            legDef.strikeOffsetSteps,
+            currentUnderlying
           );
-          errorOccurred = true;
-          break;
+          if (targetStrike === null) {
+            alert(
+              `Could not determine strike for an option leg in "${strategyTemplate.name}".`
+            );
+            errorOccurred = true;
+            break;
+          }
+          const optionData = optionsForLegExpiry.find(
+            (o) =>
+              Number(o.strike) === targetStrike &&
+              o.optionType === legDef.optionType
+          );
+          if (!optionData) {
+            alert(
+              `Option leg ${targetStrike}${
+                legDef.optionType
+              } on ${formatDisplayExpiry(legExpiry)} not found for "${
+                strategyTemplate.name
+              }".`
+            );
+            errorOccurred = true;
+            break;
+          }
+
+          let legLotSize =
+            optionData.lotSize ||
+            optionData.contractInfo?.lotSize ||
+            (currentUnderlying.toUpperCase().includes("BANKNIFTY")
+              ? 15
+              : currentUnderlying.toUpperCase().includes("FINNIFTY")
+              ? 40
+              : 50);
+
+          newLegs.push({
+            id: `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            legType: "option",
+            token: optionData.token,
+            instrumentSymbol:
+              optionData.instrumentSymbol ||
+              optionData.symbol ||
+              `${currentUnderlying} ${legExpiry} ${targetStrike}${legDef.optionType}`,
+            strike: String(targetStrike),
+            optionType: legDef.optionType,
+            expiry: legExpiry,
+            buySell: legDef.buySell,
+            lots: legDef.lotsRatio || 1,
+            price: parseFloat(optionData.lastPrice) || 0,
+            lotSize: legLotSize,
+            iv: parseFloat(optionData.iv) || DEFAULT_VOLATILITY * 100,
+            status: "new_leg",
+          });
+        } else if (legDef.legType === "future") {
+          // --- Future Leg Construction ---
+          const availableFutures = instruments?.futures || []; // Assumed sorted by expiry
+          if (availableFutures.length === 0) {
+            alert(`No futures contracts found for ${currentUnderlying}.`);
+            errorOccurred = true;
+            break;
+          }
+
+          let selectedFutureInstance = null;
+
+          if (legDef.contractSelector === "SELECTED_FROM_DROPDOWN") {
+            if (!selectedFutureContractToken) {
+              alert(
+                "Please select a future contract from the dropdown for this strategy."
+              );
+              errorOccurred = true;
+              break;
+            }
+            selectedFutureInstance = availableFutures.find(
+              (f) => f.token === selectedFutureContractToken
+            );
+          } else if (legDef.contractSelector === "NEAREST") {
+            selectedFutureInstance = availableFutures[0];
+          } else if (legDef.contractSelector === "NEXT") {
+            if (availableFutures.length > 1)
+              selectedFutureInstance = availableFutures[1];
+            else {
+              alert(
+                `Not enough future contracts for 'NEXT' in "${strategyTemplate.name}". Using NEAREST instead.`
+              );
+              selectedFutureInstance = availableFutures[0];
+            }
+          } else {
+            // Fallback: if no specific selector, use the one selected in dropdown, or nearest if dropdown not used/empty
+            selectedFutureInstance = selectedFutureContractToken
+              ? availableFutures.find(
+                  (f) => f.token === selectedFutureContractToken
+                )
+              : availableFutures[0];
+            if (!selectedFutureInstance && availableFutures.length > 0)
+              selectedFutureInstance = availableFutures[0]; // Ensure one is picked
+          }
+
+          if (!selectedFutureInstance) {
+            alert(
+              `Could not select/find future contract for leg in "${strategyTemplate.name}".`
+            );
+            errorOccurred = true;
+            break;
+          }
+
+          let legLotSize =
+            selectedFutureInstance.lotSize ||
+            (currentUnderlying.toUpperCase().includes("BANKNIFTY")
+              ? 15
+              : currentUnderlying.toUpperCase().includes("FINNIFTY")
+              ? 40
+              : 50);
+
+          newLegs.push({
+            id: `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            legType: "future",
+            token: selectedFutureInstance.token,
+            instrumentSymbol:
+              selectedFutureInstance.instrumentSymbol ||
+              selectedFutureInstance.symbol ||
+              `${currentUnderlying} Future`,
+            expiry: selectedFutureInstance.token, // Store TOKEN in expiry field for StrategyLegRow compatibility
+            expiryDateDisplay:
+              selectedFutureInstance.expiryDate ||
+              selectedFutureInstance.expiry, // For display purposes
+            buySell: legDef.buySell,
+            lots: legDef.lotsRatio || 1,
+            price: parseFloat(selectedFutureInstance.lastPrice) || 0,
+            lotSize: legLotSize,
+            status: "new_leg",
+          });
         }
-        let legLotSize =
-          optionData.lotSize ||
-          (currentUnderlying.toUpperCase().includes("BANKNIFTY")
-            ? 35
-            : currentUnderlying.toUpperCase().includes("FINNIFTY")
-            ? 40
-            : currentUnderlying.toUpperCase().includes("NIFTY")
-            ? 75
-            : 1);
-        newLegs.push({
-          id: `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-          token: optionData.token,
-          instrumentSymbol:
-            optionData.instrumentSymbol ||
-            optionData.symbol ||
-            `${currentUnderlying}${selectedExpiry}${targetStrike}${legDef.optionType}`,
-          strike: String(targetStrike),
-          optionType: legDef.optionType,
-          expiry: selectedExpiry,
-          buySell: legDef.buySell,
-          lots: legDef.lotsRatio || 1,
-          price: parseFloat(optionData.lastPrice) || 0,
-          lotSize: legLotSize,
-          iv: parseFloat(optionData.iv) || DEFAULT_VOLATILITY * 100,
-          status: "new_leg",
-        });
       }
-      if (!errorOccurred && newLegs.length > 0) {
+
+      if (!errorOccurred && newLegs.length > 0)
         onLoadStrategyLegs(newLegs, "new_leg");
-      } else if (!errorOccurred && strategyTemplate.legs.length > 0) {
-        alert(`Could not construct all legs for "${strategyTemplate.name}".`);
-      }
+      else if (!errorOccurred && strategyTemplate.legs.length > 0)
+        alert(
+          `Could not construct all legs for "${strategyTemplate.name}". Check data availability.`
+        );
+      // Error messages handled within the loop
     },
     [
-      selectedExpiry,
+      selectedOptionExpiry,
       underlyingSpotPrice,
-      liveOptionChainMap,
       currentUnderlying,
+      getTradableInstrumentsByUnderlying,
       onLoadStrategyLegs,
+      selectedFutureContractToken, // NEW dependency
     ]
   );
 
+  // Callback to load saved items (strategies, positions, drafts) into the builder
   const handleLoadSavedItemToBuilder = useCallback(
     (savedItem) => {
       if (
@@ -260,15 +499,21 @@ const ReadyMadeStrategiesSection = ({
         Array.isArray(savedItem.legs) &&
         savedItem.legs.length > 0
       ) {
-        const legsToLoad = savedItem.legs.map((leg) => ({
-          ...leg,
-          strike: String(leg.strike),
-          price: leg.price !== undefined ? parseFloat(leg.price) : 0,
-          iv:
-            leg.iv !== undefined
-              ? parseFloat(leg.iv)
-              : DEFAULT_VOLATILITY * 100,
-        }));
+        const legsToLoad = savedItem.legs.map((leg) => {
+          let loadedLeg = {
+            ...leg,
+            price: leg.price !== undefined ? parseFloat(leg.price) : 0,
+          };
+          if (leg.legType === "option") {
+            loadedLeg.strike = Number(leg.strike);
+            loadedLeg.iv =
+              leg.iv !== undefined
+                ? parseFloat(leg.iv)
+                : DEFAULT_VOLATILITY * 100;
+          }
+          loadedLeg.lotSize = Number(leg.lotSize) || 1; // Ensure lotSize is number
+          return loadedLeg;
+        });
         onLoadStrategyLegs(legsToLoad, savedItem.status);
       } else {
         alert("Cannot load item: Leg data is missing or invalid.");
@@ -277,6 +522,7 @@ const ReadyMadeStrategiesSection = ({
     [onLoadStrategyLegs]
   );
 
+  // Callback to render the list of saved items (strategies, positions, drafts)
   const renderSavedItemsList = useCallback(
     (items, itemTypeLabel, isLoading, emptyMessage, showSearch = false) => {
       if (isLoading)
@@ -297,20 +543,17 @@ const ReadyMadeStrategiesSection = ({
                   .includes(searchTermSaved.toLowerCase())
             )
           : items;
-
-      if (!Array.isArray(itemsToDisplay) || itemsToDisplay.length === 0) {
+      if (!Array.isArray(itemsToDisplay) || itemsToDisplay.length === 0)
         return (
           <div className="tab-content-placeholder empty-state">
-            {" "}
             {itemTypeLabel === "My Strategies" ? <IconEmptyBox /> : null}{" "}
             <p>
               {searchTermSaved && showSearch
                 ? `No results for "${searchTermSaved}".`
                 : emptyMessage}
-            </p>{" "}
+            </p>
           </div>
         );
-      }
 
       return (
         <div
@@ -320,14 +563,13 @@ const ReadyMadeStrategiesSection = ({
         >
           {showSearch && (
             <div className="saved-items-search-bar">
-              {" "}
               <IconSearch />{" "}
               <input
                 type="text"
                 placeholder={`Search ${itemTypeLabel.toLowerCase()}...`}
                 value={searchTermSaved}
                 onChange={(e) => setSearchTermSaved(e.target.value)}
-              />{" "}
+              />
             </div>
           )}
           <div className="saved-items-grid">
@@ -337,11 +579,23 @@ const ReadyMadeStrategiesSection = ({
                 pnlClass = "pnl-neutral",
                 initialNetValueDisplay = "₹0",
                 cardExpiryDisplay = "N/A";
-
               if (Array.isArray(item.legs) && item.legs.length > 0) {
                 const uniqueExpiries = [
                   ...new Set(
-                    item.legs.map((leg) => leg.expiry).filter(Boolean)
+                    item.legs
+                      .map((leg) => {
+                        if (leg.legType === "future") {
+                          const instrument = getInstrumentByToken(leg.token);
+                          return (
+                            instrument?.expiryDate ||
+                            instrument?.expiry ||
+                            leg.expiryDateDisplay ||
+                            leg.expiry
+                          );
+                        }
+                        return leg.expiry;
+                      })
+                      .filter(Boolean)
                   ),
                 ];
                 if (uniqueExpiries.length === 1)
@@ -356,26 +610,26 @@ const ReadyMadeStrategiesSection = ({
                 item.legs.length > 0
               ) {
                 let unrealizedPnl = 0,
-                  initialNetDebitCredit = 0,
-                  pnlDenominator = 0;
+                  initialNetDebitCredit = 0;
                 item.legs.forEach((leg) => {
-                  const liveOptData = getOptionByToken(leg.token);
+                  const instrumentDetails = getInstrumentByToken(leg.token);
                   const entryPrice = parseFloat(leg.price);
                   const currentLtp =
-                    liveOptData?.lastPrice !== undefined
-                      ? parseFloat(liveOptData.lastPrice)
+                    instrumentDetails?.lastPrice !== undefined
+                      ? parseFloat(instrumentDetails.lastPrice)
                       : entryPrice;
                   const lots = Number(leg.lots) || 1;
-                  const lotSize = Number(leg.lotSize) || 1;
-                  const multiplier = lots * lotSize;
+                  const legContractSize = Number(leg.lotSize) || 1;
+                  const positionMultiplier = lots * legContractSize;
+                  let pnlForLegPerUnit = 0;
                   if (leg.buySell === "Buy") {
-                    unrealizedPnl += (currentLtp - entryPrice) * multiplier;
-                    initialNetDebitCredit += entryPrice * multiplier;
+                    pnlForLegPerUnit = currentLtp - entryPrice;
+                    initialNetDebitCredit += entryPrice * positionMultiplier;
                   } else if (leg.buySell === "Sell") {
-                    unrealizedPnl += (entryPrice - currentLtp) * multiplier;
-                    initialNetDebitCredit -= entryPrice * multiplier;
+                    pnlForLegPerUnit = entryPrice - currentLtp;
+                    initialNetDebitCredit -= entryPrice * positionMultiplier;
                   }
-                  pnlDenominator += entryPrice * multiplier;
+                  unrealizedPnl += pnlForLegPerUnit * positionMultiplier;
                 });
                 initialNetValueDisplay = `${
                   initialNetDebitCredit > 0
@@ -403,14 +657,16 @@ const ReadyMadeStrategiesSection = ({
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })}`;
-                  if (pnlDenominator !== 0) {
+                  if (Math.abs(initialNetDebitCredit) > 0.01) {
                     const pnlPercentage =
-                      (unrealizedPnl / Math.abs(pnlDenominator)) * 100;
+                      (unrealizedPnl / Math.abs(initialNetDebitCredit)) * 100;
                     pnlPercentageDisplay = `(${
                       pnlPercentage > 0 ? "+" : ""
                     }${pnlPercentage.toFixed(1)}%)`;
                   } else if (unrealizedPnl !== 0) {
-                    pnlPercentageDisplay = `(₹${unrealizedPnl.toFixed(0)})`;
+                    pnlPercentageDisplay = `(Abs: ₹${unrealizedPnl.toFixed(
+                      0
+                    )})`;
                   } else {
                     pnlPercentageDisplay = "(0.0%)";
                   }
@@ -418,7 +674,6 @@ const ReadyMadeStrategiesSection = ({
                     unrealizedPnl > 0 ? "pnl-positive" : "pnl-negative";
                 }
               }
-
               return (
                 <div
                   key={item._id || item.id}
@@ -428,27 +683,24 @@ const ReadyMadeStrategiesSection = ({
                 >
                   <div className="card-main-content">
                     <div className="card-header">
-                      {" "}
                       <h3 className="card-title">
                         {item.name || `Unnamed ${itemTypeLabel.slice(0, -1)}`}
-                      </h3>{" "}
+                      </h3>
                       {item.status === "active_position" && (
                         <div className={`card-pnl ${pnlClass}`}>
-                          {" "}
                           <span className="pnl-absolute">
                             {pnlAbsoluteDisplay}
-                          </span>{" "}
+                          </span>
                           {pnlPercentageDisplay && (
                             <span className="pnl-percentage">
                               {pnlPercentageDisplay}
                             </span>
-                          )}{" "}
+                          )}
                         </div>
-                      )}{" "}
+                      )}
                     </div>
                     <div className="card-body">
                       <div className="card-detail-row">
-                        {" "}
                         <span className="card-detail">
                           <span className="detail-label">Underlying:</span>{" "}
                           {item.underlying || "N/A"}
@@ -456,10 +708,9 @@ const ReadyMadeStrategiesSection = ({
                         <span className="card-detail">
                           <span className="detail-label">Expiry:</span>{" "}
                           {cardExpiryDisplay}
-                        </span>{" "}
+                        </span>
                       </div>
                       <div className="card-detail-row">
-                        {" "}
                         <span className="card-detail">
                           <span className="detail-label">Legs:</span>{" "}
                           {Array.isArray(item.legs) ? item.legs.length : 0}
@@ -469,11 +720,10 @@ const ReadyMadeStrategiesSection = ({
                             <span className="detail-label">Net Value:</span>{" "}
                             {initialNetValueDisplay}
                           </span>
-                        )}{" "}
+                        )}
                       </div>
                       {Array.isArray(item.legs) && item.legs.length > 0 && (
                         <div className="card-legs-preview">
-                          {" "}
                           {item.legs.slice(0, 3).map((leg, idx) => (
                             <span key={leg.id || idx} className="leg-chip">
                               {getLegSummaryDisplay(leg)}
@@ -483,15 +733,13 @@ const ReadyMadeStrategiesSection = ({
                             <span className="leg-chip more-legs">
                               +{item.legs.length - 3} more
                             </span>
-                          )}{" "}
+                          )}
                         </div>
                       )}
                     </div>
                   </div>
                   <div className="card-footer">
-                    {" "}
                     <span className="card-date">
-                      {" "}
                       {item.status === "active_position"
                         ? "Traded"
                         : item.status === "draft"
@@ -507,7 +755,7 @@ const ReadyMadeStrategiesSection = ({
                         day: "2-digit",
                         month: "short",
                         year: "numeric",
-                      })}{" "}
+                      })}
                     </span>{" "}
                     <Button
                       variant="icon-only"
@@ -517,9 +765,8 @@ const ReadyMadeStrategiesSection = ({
                         handleLoadSavedItemToBuilder(item);
                       }}
                     >
-                      {" "}
-                      <IconLoadToBuilder />{" "}
-                    </Button>{" "}
+                      <IconLoadToBuilder />
+                    </Button>
                   </div>
                 </div>
               );
@@ -528,7 +775,7 @@ const ReadyMadeStrategiesSection = ({
         </div>
       );
     },
-    [searchTermSaved, getOptionByToken, handleLoadSavedItemToBuilder]
+    [searchTermSaved, getInstrumentByToken, handleLoadSavedItemToBuilder]
   );
 
   return (
@@ -540,34 +787,70 @@ const ReadyMadeStrategiesSection = ({
       />
       {activeMainTab === "readymade" && (
         <div className="strategy-selection-content">
-          {" "}
-          <p className="selection-prompt">Select a ready-made strategy</p>{" "}
+          {/* Toggle button for Options/Futures */}
+          <div className="ready-made-type-toggle-container">
+            <ToggleButtonGroup
+              options={[
+                { label: "Option Strategies", value: "options" },
+                { label: "Future Strategies", value: "futures" },
+              ]}
+              selected={readyMadeType}
+              onSelect={(type) => setReadyMadeType(type)}
+              className="ready-made-type-toggle"
+            />
+          </div>
+
+          <p className="selection-prompt">
+            Select a ready-made{" "}
+            {readyMadeType === "options" ? "OPTION" : "FUTURE"} strategy
+          </p>
           <div className="strategy-filters-bar">
-            {" "}
-            {STRATEGY_CATEGORIES.map((filter) => (
+            {/* Use dynamic categories based on readyMadeType */}
+            {currentStrategyCategories.map((filter) => (
               <Button
                 key={filter}
-                variant={activeFilter === filter ? "primary" : "tertiary"}
+                variant={
+                  activeStrategyCategoryFilter === filter
+                    ? "primary"
+                    : "tertiary"
+                }
                 className={`filter-button ${
-                  activeFilter === filter ? "active" : ""
+                  activeStrategyCategoryFilter === filter ? "active" : ""
                 }`}
-                onClick={() => setActiveFilter(filter)}
+                onClick={() => setActiveStrategyCategoryFilter(filter)}
               >
-                {" "}
-                {filter}{" "}
+                {filter}
               </Button>
-            ))}{" "}
-            <Select
-              options={availableExpiries}
-              value={selectedExpiry}
-              onChange={setSelectedExpiry}
-              className="expiry-select"
-              placeholder="Select Expiry"
-              disabled={availableExpiries.length === 0 || !currentUnderlying}
-            />{" "}
-          </div>{" "}
+            ))}
+
+            {/* Conditionally render Option Expiry or Future Contract Select */}
+            {readyMadeType === "options" && (
+              <Select
+                options={availableOptionExpiries}
+                value={selectedOptionExpiry}
+                onChange={setSelectedOptionExpiry}
+                className="expiry-select"
+                placeholder="Select Option Expiry"
+                disabled={
+                  availableOptionExpiries.length === 0 || !currentUnderlying
+                }
+              />
+            )}
+            {readyMadeType === "futures" && ( // NEW: Dropdown for future contracts
+              <Select
+                options={availableFutureContracts}
+                value={selectedFutureContractToken}
+                onChange={setSelectedFutureContractToken}
+                className="expiry-select future-contract-select"
+                placeholder="Select Future Contract"
+                disabled={
+                  availableFutureContracts.length === 0 || !currentUnderlying
+                }
+              />
+            )}
+          </div>
           <div className="strategy-grid">
-            {" "}
+            {/* Use dynamic strategy definitions */}
             {filteredReadyMadeStrategies.map((strategy) => (
               <div
                 key={strategy.id}
@@ -575,26 +858,31 @@ const ReadyMadeStrategiesSection = ({
                 onClick={() => handleSelectReadyMadeStrategy(strategy)}
                 title={strategy.description || `Load ${strategy.name}`}
               >
-                {" "}
                 <div className="strategy-chart-placeholder">
-                  {strategy.chartIcon || "♟️"}
-                </div>{" "}
-                <p>{strategy.name}</p>{" "}
+                  {strategy.chartIcon ||
+                    (readyMadeType === "options" ? "♟️O" : "♟️F")}
+                </div>
+                <p>{strategy.name}</p>
               </div>
-            ))}{" "}
+            ))}
             {filteredReadyMadeStrategies.length === 0 &&
               currentUnderlying &&
-              activeFilter && (
+              activeStrategyCategoryFilter && (
                 <p className="no-strategies-message">
-                  No "{activeFilter}" strategies for {currentUnderlying}.
+                  No "{activeStrategyCategoryFilter}"{" "}
+                  {readyMadeType.slice(0, -1)} strategies for{" "}
+                  {currentUnderlying}.
                 </p>
-              )}{" "}
+              )}
             {!currentUnderlying && (
-              <p className="no-strategies-message">Select an underlying.</p>
-            )}{" "}
-          </div>{" "}
+              <p className="no-strategies-message">
+                Select an underlying to see strategies.
+              </p>
+            )}
+          </div>
         </div>
       )}
+      {/* Render other tabs: positions, mystrategies, drafts */}
       {activeMainTab === "positions" &&
         renderSavedItemsList(
           userPositions,

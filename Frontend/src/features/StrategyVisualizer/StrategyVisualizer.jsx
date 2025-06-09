@@ -1,4 +1,3 @@
-// src/features/StrategyVisualizer/StrategyVisualizer.jsx
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import "./StrategyVisualizer.scss";
 import HeaderSection from "./sections/HeaderSection";
@@ -11,65 +10,75 @@ import DetailedDataSection from "./sections/DetailedDataSection";
 import { useLiveOptionData } from "../../contexts/LiveOptionDataContext";
 import { RISK_FREE_RATE, DEFAULT_VOLATILITY } from "../../config";
 import { fetchStrategies, saveStrategy } from "../../services/strategyService";
-import { generatePayoffGraphData } from "../utils/payoffChartUtils";      
+import { generatePayoffGraphData } from "../utils/payoffChartUtils";
 import { PAYOFF_GRAPH_POINTS, PAYOFF_GRAPH_INTERVAL_STEP } from "../../config";
 
 const HARDCODED_USER_ID = "userTest01";
 
 const StrategyVisualizer = () => {
+  // 1. Get data and functions from the LiveOptionDataContext
   const {
-    liveOptionChainMap,
+    liveInstrumentChainArray, //All instruments
     websocketReadyState,
     SocketIOReadyState,
     availableUnderlyings,
-    getOptionsByUnderlying,
-    getOptionByToken,
+    getTradableInstrumentsByUnderlying, //To group both options and futures by the underlying.
+    getInstrumentByToken, //To find an instrument by token whether it is a future or option
   } = useLiveOptionData();
 
-  const [instrumentType, setInstrumentType] = useState("index");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [strategyLegs, setStrategyLegs] = useState([]);
-  const [activeChartTab, setActiveChartTab] = useState("payoffgraph");
-  const [activeMainTab, setActiveMainTab] = useState("readymade");
-  const [multiplier, setMultiplier] = useState(1);
-  const [niftyTarget, setNiftyTarget] = useState("");
+  // 2. Define the state variables for the strategy visualizer
+  const [instrumentType, setInstrumentType] = useState("index"); //To make sure the strategy visualizer can handle both Equity/Index
+  const [searchTerm, setSearchTerm] = useState(""); //To ensure that the Search Term can be modified by the underlying
+  const [strategyLegs, setStrategyLegs] = useState([]); //Stores all the legs of the strategy(has details for both futures and options)
+  const [activeChartTab, setActiveChartTab] = useState("payoffgraph"); //To define which tab is active on the chart.
+  const [activeMainTab, setActiveMainTab] = useState("readymade"); //To define what the Active Main Tab is.
+  const [multiplier, setMultiplier] = useState(1); // To manage the multiplier for the strategy (lot size etc.)
+  const [niftyTarget, setNiftyTarget] = useState(""); // To create a  local nifty target.
   const [isNiftyTargetManuallySet, setIsNiftyTargetManuallySet] =
-    useState(false);
-
+    useState(false); //To ensure that the nifty target is manually set by the use or the price.
   const [targetDate, setTargetDate] = useState(() => {
+    //Local Store for the date.
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     return now.toISOString().slice(0, 16);
   });
-  const [globalIvOffset, setGlobalIvOffset] = useState(0);
-  const [individualIvAdjustments, setIndividualIvAdjustments] = useState({});
-  const [multiplyByLotSize, setMultiplyByLotSizeState] = useState(true);
-  const [multiplyByNumLots, setMultiplyByNumLotsState] = useState(true);
-  
-  const [userPositions, setUserPositions] = useState([]);
-  const [mySavedStrategies, setMySavedStrategies] = useState([]);
-  const [draftStrategies, setDraftStrategies] = useState([]);
+  const [globalIvOffset, setGlobalIvOffset] = useState(0); // Local store for IV offset.
+  const [individualIvAdjustments, setIndividualIvAdjustments] = useState({}); //Used to adjust IV.
+  const [multiplyByLotSize, setMultiplyByLotSizeState] = useState(true); //Localstate to determine the final P&L w.r.t the lotsize
+  const [multiplyByNumLots, setMultiplyByNumLotsState] = useState(true); //Local state to multiply the num of Lots.
+  //Loading different tabs.
+  const [userPositions, setUserPositions] = useState([]); // Used to load user positions
+  const [mySavedStrategies, setMySavedStrategies] = useState([]); // Load saved strategies.
+  const [draftStrategies, setDraftStrategies] = useState([]); // Used for drafts.
   const [isLoadingTabData, setIsLoadingTabData] = useState({
     positions: false,
     myStrategies: false,
     drafts: false,
   });
-  const [sdDays, setSdDays] = useState(7);
+  //console.log(strategyLegs)
+  const [sdDays, setSdDays] = useState(7); // Set Standard deviation days to 7 as default.
 
   const underlyingSpotPrice = useMemo(() => {
-    if (!searchTerm || !liveOptionChainMap || liveOptionChainMap.size === 0)
+    //Get spot price.
+
+    if (
+      !searchTerm ||
+      !liveInstrumentChainArray ||
+      liveInstrumentChainArray.length === 0
+    )
       return null;
-    const anOption = Array.from(liveOptionChainMap.values()).find(
-      (opt) => opt.underlying === searchTerm && opt.marketData
+    //Find instrument by underlying
+    const instrument = liveInstrumentChainArray.find(
+      (instr) => instr.underlying === searchTerm && instr.marketData
     );
-    const spot = anOption?.marketData?.spot
-      ? parseFloat(anOption.marketData.spot)
-      : anOption?.marketData?.futures
-      ? parseFloat(anOption.marketData.futures)
+    //Extract data
+    const spot = instrument?.marketData?.spot
+      ? parseFloat(instrument.marketData.spot)
+      : instrument?.marketData?.futures
+      ? parseFloat(instrument.marketData.futures)
       : null;
     return !isNaN(spot) && spot > 0 ? spot : null;
-  }, [searchTerm, liveOptionChainMap]);
-
+  }, [searchTerm, liveInstrumentChainArray]);
   useEffect(() => {
     if (
       availableUnderlyings &&
@@ -82,7 +91,6 @@ const StrategyVisualizer = () => {
       setIsNiftyTargetManuallySet(false);
     }
   }, [availableUnderlyings, searchTerm]);
-
   useEffect(() => {
     if (!isNiftyTargetManuallySet && underlyingSpotPrice !== null) {
       setNiftyTarget(underlyingSpotPrice.toFixed(2));
@@ -93,46 +101,6 @@ const StrategyVisualizer = () => {
     ) {
     }
   }, [underlyingSpotPrice, isNiftyTargetManuallySet, niftyTarget]);
-//console.log(sdDays);
-  // useEffect(() => {
-  //   const loadActivePositionsForBuilder = async () => {
-  //     if (searchTerm && HARDCODED_USER_ID) {
-  //       try {
-  //         const activeStrategies = await fetchStrategies({
-  //           userId: HARDCODED_USER_ID,
-  //           status: "active_position",
-  //         });
-  //         const activeLegsForCurrentUnderlying = activeStrategies
-  //           .filter((strategy) => strategy.underlying === searchTerm)
-  //           .flatMap((strategy) => strategy.legs || [])
-  //           .map((leg) => ({
-  //             ...leg,
-  //             id:
-  //               leg.id ||
-  //               `leg_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-  //             price: parseFloat(leg.price) || 0,
-  //             iv:
-  //               leg.iv !== undefined
-  //                 ? parseFloat(leg.iv)
-  //                 : DEFAULT_VOLATILITY * 100,
-  //             lots: parseInt(leg.lots, 10) || 1,
-  //             selected: leg.selected !== undefined ? leg.selected : true,
-  //           }));
-  //         setStrategyLegs(activeLegsForCurrentUnderlying);
-  //       } catch (error) {
-  //         console.error(
-  //           `StrategyVisualizer: Error fetching active positions for builder (underlying: ${searchTerm}):`,
-  //           error
-  //         );
-  //         setStrategyLegs([]);
-  //       }
-  //     } else if (!searchTerm) {
-  //       setStrategyLegs([]);
-  //     }
-  //   };
-  //   loadActivePositionsForBuilder();
-  // }, [searchTerm]);
-
   const handleInstrumentTypeChange = useCallback(
     (type) => setInstrumentType(type),
     []
@@ -170,7 +138,6 @@ const StrategyVisualizer = () => {
       setIsLoadingTabData((prev) => ({ ...prev, [tabKey]: false }));
     }
   }, []);
-
   const handleMainTabChange = useCallback(
     (tabId) => {
       setActiveMainTab(tabId);
@@ -191,7 +158,6 @@ const StrategyVisualizer = () => {
     },
     [fetchDataForTabDisplay]
   );
-
   const handleNiftyTargetChange = useCallback((valStr) => {
     const numVal = parseFloat(valStr);
     if (!isNaN(numVal) && numVal >= 0) {
@@ -209,7 +175,6 @@ const StrategyVisualizer = () => {
     } else {
     }
   }, [underlyingSpotPrice]);
-
   const handleTargetDateChange = useCallback((val) => setTargetDate(val), []);
   const handleMultiplyLotSizeChange = useCallback(
     (checked) => setMultiplyByLotSizeState(Boolean(checked)),
@@ -245,7 +210,6 @@ const StrategyVisualizer = () => {
 
   const handleLoadStrategyLegsIntoBuilder = useCallback(
     (legsToLoad, itemStatus) => {
-      console.log(legsToLoad)
       const newLegs = legsToLoad.map((leg) => ({
         ...leg,
         id:
@@ -298,45 +262,44 @@ const StrategyVisualizer = () => {
 
   const getScenarioIV = useCallback(
     (legToken) => {
-      const liveOption = getOptionByToken(legToken);
+      const liveOption = getInstrumentByToken(legToken);
       if (!liveOption || liveOption.iv === undefined) return DEFAULT_VOLATILITY;
       const baseIV = parseFloat(liveOption.iv);
       const indAdj = individualIvAdjustments[legToken] || 0;
       const scenarioIV = baseIV + indAdj + globalIvOffset;
       return Math.max(0.001, scenarioIV / 100);
     },
-    [getOptionByToken, individualIvAdjustments, globalIvOffset]
+    [getInstrumentByToken, individualIvAdjustments, globalIvOffset]
   );
 
-  const optionsForCurrentUnderlying = useMemo(() => {
-    if (!searchTerm || !getOptionsByUnderlying) return [];
-    const options = getOptionsByUnderlying(searchTerm);
-   // console.log(options);
-    return options || [];
-  }, [searchTerm, getOptionsByUnderlying, liveOptionChainMap]);
- //console.log(strategyLegs)
-  if (
-    !SocketIOReadyState ||
-    websocketReadyState === SocketIOReadyState.CONNECTING ||
-    websocketReadyState === SocketIOReadyState.RECONNECTING
-  ) {
-    return <div className="loading-overlay">Connecting to Market Data...</div>;
-  }
-  if (
-    websocketReadyState === SocketIOReadyState.CLOSED &&
-    (!liveOptionChainMap || liveOptionChainMap.size === 0)
-  ) {
-    return (
-      <div className="error-overlay">
-        Market data connection closed. Please refresh.
-      </div>
-    );
-  }
+const tradableInstrumentsForSelectedUnderlying = useMemo(() => {
+    if (!searchTerm || !getTradableInstrumentsByUnderlying) return { options: [], futures: [] }; // Default structure
+    // This function from context now returns { options: [...], futures: [...] }
+    return getTradableInstrumentsByUnderlying(searchTerm);
+  }, [searchTerm, getTradableInstrumentsByUnderlying, liveInstrumentChainArray]);
+  //console.log(strategyLegs)
+  // if (
+  //   !SocketIOReadyState ||
+  //   websocketReadyState === SocketIOReadyState.CONNECTING ||
+  //   websocketReadyState === SocketIOReadyState.RECONNECTING
+  // ) {
+  //   return <div className="loading-overlay">Connecting to Market Data...</div>;
+  // }
+  // if (
+  //   websocketReadyState === SocketIOReadyState.CLOSED &&
+  //   (!liveInstrumentChainArray || liveInstrumentChainArray.length === 0)
+  // ) {
+  //   return (
+  //     <div className="error-overlay">
+  //       Market data connection closed. Please refresh.
+  //     </div>
+  //   );
+  // }
   let optionChainArray = [];
-  if (liveOptionChainMap instanceof Map) {
-    optionChainArray = Array.from(liveOptionChainMap.values());
-  } else if (Array.isArray(liveOptionChainMap)) {
-    optionChainArray = liveOptionChainMap;
+  if (liveInstrumentChainArray instanceof Map) {
+    optionChainArray = Array.from(liveInstrumentChainArray.values());
+  } else if (Array.isArray(liveInstrumentChainArray)) {
+    optionChainArray = liveInstrumentChainArray;
     if (optionChainArray.length > 0) {
       const firstElement = optionChainArray[0];
       if (
@@ -360,37 +323,37 @@ const StrategyVisualizer = () => {
         optionChainArray = []; // Clear if format is wrong
       }
     }
-  } else if (liveOptionChainMap) {
+  } else if (liveInstrumentChainArray) {
     console.warn(
       "PayoffChart: liveOptionChainMap received is neither a Map nor an Array. OI data will be missing.",
       typeof liveOptionChainMap
     );
   }
 
-   const payoffGraphData = generatePayoffGraphData({
-      strategyLegs,
-      niftyTarget: niftyTarget.toString(),
-      displaySpotForSlider: underlyingSpotPrice,
-      targetDateISO: targetDate,
-      riskFreeRate: RISK_FREE_RATE,
-      getScenarioIV,
-      getOptionByToken,
-      targetInterval:50,
-      PAYOFF_GRAPH_POINTS,
-      PAYOFF_GRAPH_INTERVAL_STEP,
-      underlyingSpotPrice, // Pass the actual market spot if needed for specific P&L % base elsewhere
-      showPercentage:true,
-      sdDays,
-      liveOptionChainMap: optionChainArray,
-    });
+  const payoffGraphData = generatePayoffGraphData({
+    strategyLegs,
+    niftyTarget: niftyTarget.toString(),
+    displaySpotForSlider: underlyingSpotPrice,
+    targetDateISO: targetDate,
+    riskFreeRate: RISK_FREE_RATE,
+    getScenarioIV,
+    getInstrumentByToken,
+    targetInterval: 1000,
+    PAYOFF_GRAPH_POINTS,
+    PAYOFF_GRAPH_INTERVAL_STEP,
+    underlyingSpotPrice, // Pass the actual market spot if needed for specific P&L % base elsewhere
+    showPercentage: true,
+    sdDays,
+    fullOptionChainData: optionChainArray,
+  });
 
   const commonScenarioProps = {
     strategyLegs,
-    getOptionByToken,
+    getInstrumentByToken,
     riskFreeRate: RISK_FREE_RATE,
     getScenarioIV,
   };
-const payoffChartProps = {
+  const payoffChartProps = {
     ...commonScenarioProps, // Spreads strategyLegs, getOptionByToken, riskFreeRate, getScenarioIV
     activeChartTab,
     onChartTabChange: handleChartTabChange,
@@ -399,7 +362,7 @@ const payoffChartProps = {
     onResetNiftyTarget: handleResetNiftyTargetToLive,
     targetDate,
     onTargetDateChange: handleTargetDateChange,
-    liveOptionChainMap, 
+    liveOptionChainMap: liveInstrumentChainArray,
     currentUnderlying: searchTerm,
     underlyingSpotPrice: underlyingSpotPrice, // Pass the live spot
     multiplyByLotSize,
@@ -409,10 +372,9 @@ const payoffChartProps = {
     handleSdDaysChange: handleSdDaysChange,
     sdDays, // Pass the SD days for SD bands
     // getScenarioIV is already in commonScenarioProps
-     multiplier,
-     underlyingSpotPrice
+    multiplier,
+    underlyingSpotPrice,
   };
-  
 
   const detailedDataProps = {
     ...commonScenarioProps,
@@ -428,18 +390,18 @@ const payoffChartProps = {
     onMultiplyByLotSizeChange: handleMultiplyLotSizeChange,
     multiplyByNumLots,
     onMultiplyByNumLotsChange: handleMultiplyNumLotsChange,
-    liveOptionChainMap,
+    liveOptionChainMap: liveInstrumentChainArray,
     underlyingSpotPrice, // Pass live spot for consistency if needed
     sdDays,
-    multiplier
+    multiplier,
   };
   const readyMadeStrategiesProps = {
     activeMainTab,
     onMainTabChange: handleMainTabChange,
     currentUnderlying: searchTerm,
-    liveOptionChainMap,
-    getOptionsByUnderlying,
-    getOptionByToken,
+   liveInstrumentChainArray,
+   getTradableInstrumentsByUnderlying, //To group both options and futures by the underlying.
+   getInstrumentByToken,
     underlyingSpotPrice,
     onLoadStrategyLegs: handleLoadStrategyLegsIntoBuilder,
     userPositions,
@@ -447,18 +409,19 @@ const payoffChartProps = {
     draftStrategies,
     isLoadingTabData,
   };
+
   const newStrategyProps = {
     strategyLegs,
     onStrategyLegsChange: handleStrategyLegsChange,
-    optionsForSelectedUnderlying: optionsForCurrentUnderlying,
+    tradableInstrumentsForSelectedUnderlying: tradableInstrumentsForSelectedUnderlying, // MODIFIED: Was optionsForSelectedUnderlying
     currentUnderlying: searchTerm,
     onSaveStrategy: handleSaveStrategyFromBuilder,
-    getOptionByToken,
+    getInstrumentByToken, // MODIFIED
     underlyingSpotPrice,
-    multiplier,
+    multiplier, // Overall strategy multiplier
     setMultiplier,
   };
-  //console.log(multiplier);
+  console.log(multiplier);
   return (
     <div className="strategy-visualizer-container">
       <HeaderSection />
@@ -479,7 +442,7 @@ const payoffChartProps = {
         projectedNiftyTarget={niftyTarget}
         projectedTargetDate={targetDate}
         payoffGraphData={payoffGraphData}
-       underlyingSpotPrice={underlyingSpotPrice}
+        underlyingSpotPrice={underlyingSpotPrice}
       />
       <DetailedDataSection {...detailedDataProps} />
     </div>

@@ -1,136 +1,205 @@
 // src/features/StrategyVisualizer/data/strategyDefinitions.js
 
-// Helper to define leg strikes relative to ATM
-// steps: 0 for ATM, positive for higher strikes, negative for lower strikes
-// optionType: 'CE' or 'PE' is needed to determine if higher/lower is OTM/ITM
+// MODIFIED: Categories for options
+export const OPTION_STRATEGY_CATEGORIES = ['Bullish', 'Bearish', 'Neutral', 'Volatile', 'Others'];
 
-export const STRATEGY_CATEGORIES = ['Bullish', 'Bearish', 'Neutral', 'Others'];
-
-export const STRATEGY_DEFINITIONS = [
+// MODIFIED: All existing definitions are now explicitly options and have legType: 'option'
+export const OPTION_STRATEGY_DEFINITIONS = [
   // --- Bullish Strategies ---
   {
     id: 'buy_call', name: 'Buy Call', category: 'Bullish', chartIcon: '📈',
-    legs: [ { id: 'leg1', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 } ]
+    legs: [ { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 } ]
   },
   {
     id: 'sell_put', name: 'Sell Put', category: 'Bullish', chartIcon: '📉',
-    legs: [ { id: 'leg1', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 } ]
+    legs: [ { id: 'leg1', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 } ]
   },
   {
     id: 'bull_call_spread', name: 'Bull Call Spread', category: 'Bullish', chartIcon: '↗️',
     legs: [
-      { id: 'leg1', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 }, // Buy ITM (e.g., ATM-1)
-      { id: 'leg2', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 }  // Sell OTM (e.g., ATM+1)
-    ] // Common: Buy ATM-X, Sell ATM+Y or Buy ATM, Sell OTM
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 }
+    ]
   },
   {
     id: 'bull_put_spread', name: 'Bull Put Spread', category: 'Bullish', chartIcon: '↗️📉',
     legs: [
-      { id: 'leg1', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 }, // Sell OTM (e.g., ATM+1)
-      { id: 'leg2', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 }  // Buy further OTM (e.g., ATM-1)
-    ] // Common: Sell ATM-X, Buy ATM-Y (lower strikes)
-  },
-  {
-    id: 'call_ratio_back_spread', name: 'Call Ratio Back Spread', category: 'Bullish', chartIcon: '📈🐻',
-    legs: [
-      { id: 'leg1', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }, // Sell ITM
-      { id: 'leg2', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 2 }   // Buy 2x ATM/OTM Calls
-    ] // Volatile Bullish
-  },
-  { // Simplified Calendar: Both legs same expiry for now. True calendar needs different expiries.
-    id: 'long_calendar_calls', name: 'Long Calendar with Calls', category: 'Bullish', chartIcon: '📅📞', requiresSameExpiry: false, // Mark for special handling or future
-    legs: [
-      { id: 'leg1', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1, expirySelector: 'SELECTED' }, // Sell current month ATM
-      { id: 'leg2', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1, expirySelector: 'NEXT_AVAILABLE' }  // Buy next month ATM
-    ],
-    description: "Time decay play. Sells near-term, buys longer-term. (Note: Requires different expiries, simplified for now)"
-  },
-  // TODO: Bull Condor, Bull Butterfly - these have 4 legs.
-  {
-    id: 'long_synthetic_future', name: 'Long Synthetic Future', category: 'Bullish', chartIcon: '📈🔗',
-    legs: [
-        { id: 'leg1', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 },
-        { id: 'leg2', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 }
+      { id: 'leg1', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 }
     ]
   },
-  // Example: Range Forward from "Others" in UI but can be directional
+  {
+    id: 'call_ratio_back_spread', name: 'Call Ratio Back Spread', category: 'Volatile', chartIcon: '📈🐻',
+    legs: [
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 2 }
+    ]
+  },
+  {
+    id: 'long_calendar_calls', name: 'Long Calendar (Calls)', category: 'Neutral', chartIcon: '📅📞', requiresDifferentExpiries: true,
+    legs: [
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1, expirySelector: 'SELECTED' },
+      { id: 'leg2', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1, expirySelector: 'NEXT_AVAILABLE' }
+    ],
+    description: "Sells near-term ATM call, buys longer-term ATM call. (Requires different expiries)"
+  },
+  {
+    id: 'long_synthetic_future_options', name: 'Long Synthetic (Options)', category: 'Bullish', chartIcon: '📈🔗',
+    legs: [
+        { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 },
+        { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 }
+    ]
+  },
   {
     id: 'range_forward_bullish', name: 'Range Forward (Bullish)', category: 'Bullish', chartIcon: '↔️➡️',
     legs: [
-        { id: 'leg1', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 }, // Buy OTM Call
-        { id: 'leg2', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 } // Sell OTM Put
+        { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 },
+        { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }
     ],
-    description: "Buy OTM Call, Sell OTM Put. Similar to synthetic long future but with specific strike choices."
+    description: "Buy OTM Call, Sell OTM Put."
   },
 
   // --- Bearish Strategies ---
   {
     id: 'buy_put', name: 'Buy Put', category: 'Bearish', chartIcon: '📉',
-    legs: [ { id: 'leg1', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 } ]
+    legs: [ { id: 'leg1', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 } ]
   },
   {
     id: 'sell_call', name: 'Sell Call', category: 'Bearish', chartIcon: '📈🚫',
-    legs: [ { id: 'leg1', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 } ]
+    legs: [ { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 } ]
   },
   {
     id: 'bear_put_spread', name: 'Bear Put Spread', category: 'Bearish', chartIcon: '↘️',
     legs: [
-      { id: 'leg1', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 }, // Buy ITM (e.g., ATM+1)
-      { id: 'leg2', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }  // Sell OTM (e.g., ATM-1)
+      { id: 'leg1', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }
     ]
   },
   {
     id: 'bear_call_spread', name: 'Bear Call Spread', category: 'Bearish', chartIcon: '↘️📈',
     legs: [
-      { id: 'leg1', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }, // Sell ITM (e.g., ATM-1)
-      { id: 'leg2', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 }  // Buy OTM (e.g., ATM+1)
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 }
     ]
   },
-  // TODO: Add more bearish strategies from your UI (Put Ratio Back Spread etc.)
+   {
+    id: 'put_ratio_back_spread', name: 'Put Ratio Back Spread', category: 'Volatile', chartIcon: '📉🐻',
+    legs: [
+      { id: 'leg1', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 2 }
+    ]
+  },
+  {
+    id: 'short_synthetic_future_options', name: 'Short Synthetic (Options)', category: 'Bearish', chartIcon: '📉🔗',
+    legs: [
+        { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 },
+        { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 }
+    ]
+  },
 
-  // --- Neutral Strategies (from UI Image) ---
+  // --- Neutral Strategies ---
   {
     id: 'short_straddle', name: 'Short Straddle', category: 'Neutral', chartIcon: '▼▲',
     legs: [
-      { id: 'leg1', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 },
-      { id: 'leg2', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 }
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 1 }
     ]
   },
   {
     id: 'short_strangle', name: 'Short Strangle', category: 'Neutral', chartIcon: '╲╱',
     legs: [
-      { id: 'leg1', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 }, // Sell OTM Call
-      { id: 'leg2', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 } // Sell OTM Put
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }
     ]
   },
   {
     id: 'iron_condor', name: 'Iron Condor', category: 'Neutral', chartIcon: '🦅',
-    legs: [ // Classic Iron Condor: Sell OTM Put, Buy further OTM Put, Sell OTM Call, Buy further OTM Call
-      { id: 'leg1', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }, // Sell OTM Put 1
-      { id: 'leg2', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: -2, lotsRatio: 1 },  // Buy OTM Put 2 (lower strike)
-      { id: 'leg3', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 },  // Sell OTM Call 1
-      { id: 'leg4', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 2, lotsRatio: 1 }   // Buy OTM Call 2 (higher strike)
-    ] // UI shows "Call Condor" and "Put Condor" - these might be different constructions
-  },
-  { // Long Call Butterfly
-    id: 'long_call_butterfly', name: 'Long Call Butterfly', category: 'Neutral', chartIcon: '🦋',
     legs: [
-      { id: 'leg1', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 }, // Buy ITM Call
-      { id: 'leg2', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 2 },  // Sell 2x ATM Calls
-      { id: 'leg3', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 }   // Buy OTM Call
+      { id: 'leg1', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: -2, lotsRatio: 1 },
+      { id: 'leg3', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 1, lotsRatio: 1 },
+      { id: 'leg4', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 2, lotsRatio: 1 }
     ]
   },
-  // Note: The UI also shows "Put Condor", "Put Butterfly". These would be similar structures using puts.
-  // Example: "Bull Condor" / "Bull Butterfly" from your first UI screenshot for "Bullish" might be different.
-  // The standard "Condor" and "Butterfly" are typically neutral.
-  // For simplicity, I've used standard definitions. Adjust if your "Bull/Bear Condor/Butterfly" are specific directional plays.
-
-  // --- Others (Placeholder, based on your UI's "Range Forward") ---
+  {
+    id: 'long_call_butterfly', name: 'Long Call Butterfly', category: 'Neutral', chartIcon: '🦋',
+    legs: [
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'CE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 2 },
+      { id: 'leg3', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 }
+    ]
+  },
+  {
+    id: 'long_put_butterfly', name: 'Long Put Butterfly', category: 'Neutral', chartIcon: '🦋📉',
+    legs: [
+      { id: 'leg1', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: 0, lotsRatio: 2 },
+      { id: 'leg3', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 }
+    ]
+  },
+  // --- Volatile Strategies ---
+  {
+    id: 'long_straddle', name: 'Long Straddle', category: 'Volatile', chartIcon: '▲▼',
+    legs: [
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: 0, lotsRatio: 1 }
+    ]
+  },
+  {
+    id: 'long_strangle', name: 'Long Strangle', category: 'Volatile', chartIcon: '╱╲',
+    legs: [
+      { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 },
+      { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Buy', strikeOffsetSteps: -1, lotsRatio: 1 }
+    ]
+  },
+  // --- Others ---
   {
     id: 'range_forward_other', name: 'Range Forward', category: 'Others', chartIcon: '↔️➡️',
-    legs: [ // This is same as bullish one, refine if "Others" means different parameters
-        { id: 'leg1', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 },
-        { id: 'leg2', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }
+    legs: [
+        { id: 'leg1', legType: 'option', optionType: 'CE', buySell: 'Buy', strikeOffsetSteps: 1, lotsRatio: 1 },
+        { id: 'leg2', legType: 'option', optionType: 'PE', buySell: 'Sell', strikeOffsetSteps: -1, lotsRatio: 1 }
     ]
   }
 ];
+
+// NEW: Definitions for Future Strategies
+export const FUTURE_STRATEGY_CATEGORIES = ['Directional', 'Spreads'];
+
+export const FUTURE_STRATEGY_DEFINITIONS = [
+  {
+    id: 'long_future', name: 'Long Future', category: 'Directional', chartIcon: '⬆️F',
+    legs: [
+      { id: 'leg1', legType: 'future', buySell: 'Buy', contractSelector: 'SELECTED_FROM_DROPDOWN', lotsRatio: 1 }
+    ],
+    description: "Buy the selected futures contract."
+  },
+  {
+    id: 'short_future', name: 'Short Future', category: 'Directional', chartIcon: '⬇️F',
+    legs: [
+      { id: 'leg1', legType: 'future', buySell: 'Sell', contractSelector: 'SELECTED_FROM_DROPDOWN', lotsRatio: 1 }
+    ],
+    description: "Sell the selected futures contract."
+  },
+  {
+    id: 'futures_calendar_spread_long', name: 'Long Calendar Spread (Futures)', category: 'Spreads', chartIcon: '📅F', requiresDifferentExpiries: true,
+    legs: [
+      { id: 'leg1', legType: 'future', buySell: 'Sell', contractSelector: 'NEAREST', lotsRatio: 1 }, // Sell Near Month
+      { id: 'leg2', legType: 'future', buySell: 'Buy', contractSelector: 'NEXT', lotsRatio: 1 }    // Buy Next Month
+    ],
+    description: "Sell near-month future, buy next-month future."
+  },
+  {
+    id: 'futures_calendar_spread_short', name: 'Short Calendar Spread (Futures)', category: 'Spreads', chartIcon: '📅F🚫', requiresDifferentExpiries: true,
+    legs: [
+      { id: 'leg1', legType: 'future', buySell: 'Buy', contractSelector: 'NEAREST', lotsRatio: 1 },  // Buy Near Month
+      { id: 'leg2', legType: 'future', buySell: 'Sell', contractSelector: 'NEXT', lotsRatio: 1 }     // Sell Next Month
+    ],
+    description: "Buy near-month future, sell next-month future."
+  }
+];
+
+// For backward compatibility or if other parts of your app use these general names
+// If you have no other parts of the app using these, you can remove these two lines
+// and directly import OPTION_STRATEGY_DEFINITIONS etc. where needed.
+export const STRATEGY_CATEGORIES = OPTION_STRATEGY_CATEGORIES;
+export const STRATEGY_DEFINITIONS = OPTION_STRATEGY_DEFINITIONS;
