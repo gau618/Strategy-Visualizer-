@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:5000/api/v1';
+const API_BASE_URL = 'https://backend-fas4.onrender.com/api/v1';
 
 export const saveStrategy = async (strategyData) => {
   const response = await fetch(`${API_BASE_URL}/strategies`, {
