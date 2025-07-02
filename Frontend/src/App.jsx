@@ -14,6 +14,9 @@ function App() {
           <h1>TradVed Strategy Visualizer</h1>
           <Routes>
             <Route path="/" element={<StrategyVisualizer />} />
+            <Route path="/text" element={<Text />} />
+            {/* Add more routes as needed */}
+            <Route path="*" element={<div>Page Not Found</div>} />
           </Routes>
         </div>
       </Router>

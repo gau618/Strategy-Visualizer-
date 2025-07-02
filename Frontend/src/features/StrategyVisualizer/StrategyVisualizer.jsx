@@ -272,11 +272,16 @@ const StrategyVisualizer = () => {
     [getInstrumentByToken, individualIvAdjustments, globalIvOffset]
   );
 
-const tradableInstrumentsForSelectedUnderlying = useMemo(() => {
-    if (!searchTerm || !getTradableInstrumentsByUnderlying) return { options: [], futures: [] }; // Default structure
+  const tradableInstrumentsForSelectedUnderlying = useMemo(() => {
+    if (!searchTerm || !getTradableInstrumentsByUnderlying)
+      return { options: [], futures: [] }; // Default structure
     // This function from context now returns { options: [...], futures: [...] }
     return getTradableInstrumentsByUnderlying(searchTerm);
-  }, [searchTerm, getTradableInstrumentsByUnderlying, liveInstrumentChainArray]);
+  }, [
+    searchTerm,
+    getTradableInstrumentsByUnderlying,
+    liveInstrumentChainArray,
+  ]);
   //console.log(strategyLegs)
   // if (
   //   !SocketIOReadyState ||
@@ -399,9 +404,9 @@ const tradableInstrumentsForSelectedUnderlying = useMemo(() => {
     activeMainTab,
     onMainTabChange: handleMainTabChange,
     currentUnderlying: searchTerm,
-   liveInstrumentChainArray,
-   getTradableInstrumentsByUnderlying, //To group both options and futures by the underlying.
-   getInstrumentByToken,
+    liveInstrumentChainArray,
+    getTradableInstrumentsByUnderlying, //To group both options and futures by the underlying.
+    getInstrumentByToken,
     underlyingSpotPrice,
     onLoadStrategyLegs: handleLoadStrategyLegsIntoBuilder,
     userPositions,
@@ -413,7 +418,8 @@ const tradableInstrumentsForSelectedUnderlying = useMemo(() => {
   const newStrategyProps = {
     strategyLegs,
     onStrategyLegsChange: handleStrategyLegsChange,
-    tradableInstrumentsForSelectedUnderlying: tradableInstrumentsForSelectedUnderlying, // MODIFIED: Was optionsForSelectedUnderlying
+    tradableInstrumentsForSelectedUnderlying:
+      tradableInstrumentsForSelectedUnderlying, // MODIFIED: Was optionsForSelectedUnderlying
     currentUnderlying: searchTerm,
     onSaveStrategy: handleSaveStrategyFromBuilder,
     getInstrumentByToken, // MODIFIED

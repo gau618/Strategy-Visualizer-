@@ -1,0 +1,76 @@
+{
+  "indices": {
+    "NIFTY": {
+      "name": "Nifty 50",
+      "spotToken": "99926000",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 4, "strikeRangeATM": { "lower": 20, "upper": 20 } },
+      "futures": { "enabled": true, "expiryCount": 3 }
+    },
+    "BANKNIFTY": {
+      "name": "Nifty Bank",
+      "spotToken": "99926009",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 5, "strikeRangeATM": { "lower": 15, "upper": 15 } },
+      "futures": { "enabled": true, "expiryCount": 3 }
+    },
+    "FINNIFTY": {
+      "name": "Nifty Financial Services",
+      "spotToken": "99926037",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 2, "strikeRangeATM": { "lower": 15, "upper": 15 } },
+      "futures": { "enabled": false, "expiryCount": 1 }
+    }
+  },
+  "equities": {
+    "RELIANCE": {
+      "name": "Reliance Industries",
+      "spotToken": "2885", 
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 1, "strikeRangeATM": { "lower": 10, "upper": 10 } },
+      "futures": { "enabled": true, "expiryCount": 1 }
+    },
+    "TCS": {
+      "name": "Tata Consultancy Services",
+      "spotToken": "11536",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 1, "strikeRangeATM": { "lower": 8, "upper": 8 } },
+      "futures": { "enabled": true, "expiryCount": 1 }
+    },
+    "INFY": {
+      "name": "Infosys",
+      "spotToken": "1594",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 1, "strikeRangeATM": { "lower": 8, "upper": 8 } },
+      "futures": { "enabled": true, "expiryCount": 1 }
+    },
+    "HDFCBANK": {
+      "name": "HDFC Bank",
+      "spotToken": "1333",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 1, "strikeRangeATM": { "lower": 10, "upper": 10 } },
+      "futures": { "enabled": true, "expiryCount": 1 }
+    },
+    "ICICIBANK": {
+      "name": "ICICI Bank",
+      "spotToken": "4963",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 1, "strikeRangeATM": { "lower": 10, "upper": 10 } },
+      "futures": { "enabled": true, "expiryCount": 1 }
+    },
+    "LT": {
+      "name": "Larsen & Toubro",
+      "spotToken": "11483",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 1, "strikeRangeATM": { "lower": 10, "upper": 10 } },
+      "futures": { "enabled": true, "expiryCount": 1 }
+    },
+    "AXISBANK": {
+      "name": "Axis Bank",
+      "spotToken": "5900",
+      "exchangeSegment": "NFO",
+      "options": { "enabled": true, "expiryCount": 1, "strikeRangeATM": { "lower": 10, "upper": 10 } },
+      "futures": { "enabled": true, "expiryCount": 1 }
+    }
+  }
+}

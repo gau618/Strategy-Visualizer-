@@ -1,0 +1,1250 @@
+openapi: 3.0.3
+info:
+  title: Quiz App API
+  version: 1.0.0
+  description: |
+    Comprehensive API documentation for the Quiz App.
+
+    **Sections:**
+    - **User:** User profile, onboarding, and search APIs.
+    - **Chat:** User search, chat rooms, group management, messages, and invite codes.
+    - **Friends:** Friend requests, friends list, search, and DM chat.
+    - **Leaderboard:** Global and friends leaderboard.
+    - **Game:** All game modes (Fastest Finger, Group Play, Practice, Quick Duel, Time Attack).
+
+servers:
+  - url: https://api.yourdomain.com/api
+    description: Production server
+
+tags:
+  - name: User
+    description: User profile, onboarding, and search APIs
+  - name: Chat
+    description: Chat, group, and messaging APIs
+  - name: Friends
+    description: Friends, friend requests, and user search APIs
+  - name: Leaderboard
+    description: Leaderboard and ranking APIs
+  - name: Game
+    description: All game session and gameplay APIs
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      description: Unique identifier of the chat room
+      schema:
+        type: string
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: Unique identifier of the user
+      schema:
+        type: string
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      description: Unique identifier of the friend request
+      schema:
+        type: string
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: Unique identifier of the game session
+      schema:
+        type: string
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "user123"
+        username:
+          type: string
+          example: "alice"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://example.com/avatar.png"
+    Room:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "room123"
+        type:
+          type: string
+          enum: [DM, GROUP, GAME]
+          example: GROUP
+        name:
+          type: string
+          nullable: true
+          example: "Study Group"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        description:
+          type: string
+          nullable: true
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "msg789"
+        content:
+          type: string
+          example: "Hello everyone!"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-07-02T12:00:00Z"
+        type:
+          type: string
+          enum: [TEXT, IMAGE, FILE, SYSTEM]
+          example: TEXT
+        sender:
+          $ref: "#/components/schemas/User"
+    Invite:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "invite456"
+        code:
+          type: string
+          example: "INV12345"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2025-07-03T12:00:00Z"
+        usedById:
+          type: string
+          nullable: true
+          example: null
+        usedBy:
+          $ref: "#/components/schemas/User"
+          nullable: true
+    Friend:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "user123"
+        username:
+          type: string
+          example: "alice"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://example.com/avatar.png"
+    FriendRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        requester:
+          $ref: "#/components/schemas/Friend"
+    UserSearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "profile123"
+        userId:
+          type: string
+          example: "user123"
+        username:
+          type: string
+          example: "alice"
+        avatarUrl:
+          type: string
+          nullable: true
+        friendshipStatus:
+          type: string
+          enum: [FRIENDS, REQUEST_SENT, REQUEST_RECEIVED, NONE]
+    LeaderboardEntry:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "user123"
+        username:
+          type: string
+          example: "alice"
+        name:
+          type: string
+          example: "Alice Smith"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://example.com/avatar.png"
+        eloRating:
+          type: integer
+          example: 1500
+        xp:
+          type: integer
+          example: 2000
+        level:
+          type: integer
+          example: 10
+        rank:
+          type: integer
+          example: 1
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "profile123"
+        userId:
+          type: string
+          example: "user123"
+        username:
+          type: string
+          example: "alice"
+        name:
+          type: string
+          example: "Alice Smith"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://example.com/avatar.png"
+        bio:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ==========================
+  # === User Section APIs ====
+  # ==========================
+
+  /users/profiles:
+    post:
+      tags: [User]
+      summary: Get multiple user profiles by userIds
+      description: Returns user profile details for a list of userIds.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: string
+              required: [userIds]
+      responses:
+        '200':
+          description: List of user profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: userIds must be an array
+        '405':
+          description: Method Not Allowed
+        '500':
+          description: Internal Server Error
+
+  /users/search:
+    get:
+      tags: [User]
+      summary: Search for users by username (excluding those in a chat room)
+      description: |
+        Search for users by username, excluding those already in a specified chat room and the current user.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Username or partial username to search
+          schema:
+            type: string
+        - name: excludeRoomId
+          in: query
+          required: false
+          description: Room ID to exclude users already in the group
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of users matching search
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserSearchResult'
+        '400':
+          description: Search query is required
+        '500':
+          description: Internal Server Error
+
+  /onboarding/avatar-signature:
+    post:
+      tags: [User]
+      summary: Get Cloudinary avatar upload signature
+      description: Returns a Cloudinary signature for avatar upload.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Signature and credentials for Cloudinary upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timestamp:
+                    type: integer
+                  signature:
+                    type: string
+                  folder:
+                    type: string
+                  cloudName:
+                    type: string
+                  apiKey:
+                    type: string
+        '500':
+          description: Could not prepare file upload
+
+  /onboarding/progress:
+    put:
+      tags: [User]
+      summary: Update onboarding progress
+      description: Update a user's onboarding progress step and data.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - step
+                - data
+              properties:
+                step:
+                  type: string
+                  description: The onboarding step
+                  enum:
+                    - gamePreferences
+                    - experienceAssessment
+                    - profileSetup
+                    - practiceGame
+                data:
+                  oneOf:
+                    - type: object
+                      description: Data for gamePreferences step
+                      required: [favoriteGameModes, defaultDifficulty, notificationPreferences]
+                      properties:
+                        favoriteGameModes:
+                          type: array
+                          items:
+                            type: string
+                          example: ["QUICK_DUEL", "PRACTICE"]
+                        defaultDifficulty:
+                          type: string
+                          example: "MEDIUM"
+                        notificationPreferences:
+                          type: object
+                          properties:
+                            email:
+                              type: boolean
+                            push:
+                              type: boolean
+                          example: { "email": true, "push": false }
+                    - type: object
+                      description: Data for experienceAssessment step
+                      required: [experienceLevel, interestAreas]
+                      properties:
+                        experienceLevel:
+                          type: string
+                          example: "BEGINNER"
+                        interestAreas:
+                          type: array
+                          items:
+                            type: string
+                          example: ["Stocks", "Crypto"]
+                    - type: object
+                      description: Data for profileSetup step
+                      required: [bio, location, website, avatarUrl]
+                      properties:
+                        bio:
+                          type: string
+                          example: "I am a new trader interested in learning."
+                        location:
+                          type: string
+                          example: "New York, USA"
+                        website:
+                          type: string
+                          example: "https://my-portfolio.com"
+                        avatarUrl:
+                          type: string
+                          example: "https://res.cloudinary.com/..."
+                    - type: object
+                      description: Data for practiceGame step
+                      required: [gameSessionId, score]
+                      properties:
+                        gameSessionId:
+                          type: string
+                          example: "clxzcb9o1000008l4hy23ajbu"
+                        score:
+                          type: integer
+                          example: 150
+              examples:
+                gamePreferences:
+                  value:
+                    step: gamePreferences
+                    data:
+                      favoriteGameModes: ["QUICK_DUEL", "PRACTICE"]
+                      defaultDifficulty: "MEDIUM"
+                      notificationPreferences:
+                        email: true
+                        push: false
+                experienceAssessment:
+                  value:
+                    step: experienceAssessment
+                    data:
+                      experienceLevel: "BEGINNER"
+                      interestAreas: ["Stocks", "Crypto"]
+                profileSetup:
+                  value:
+                    step: profileSetup
+                    data:
+                      bio: "I am a new trader interested in learning."
+                      location: "New York, USA"
+                      website: "https://my-portfolio.com"
+                      avatarUrl: "https://res.cloudinary.com/..."
+                practiceGame:
+                  value:
+                    step: practiceGame
+                    data:
+                      gameSessionId: "clxzcb9o1000008l4hy23ajbu"
+                      score: 150
+      responses:
+        '200':
+          description: Onboarding progress updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request body
+        '500':
+          description: Internal Server Error
+
+  # ==========================
+  # === Chat Section APIs ====
+  # ==========================
+
+  /user/search:
+    get:
+      tags: [Chat]
+      summary: Search users excluding those in a specific group
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Username or partial username to search
+          schema:
+            type: string
+        - name: excludeRoomId
+          in: query
+          required: true
+          description: Room ID to exclude users already in the group
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of users matching search
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized - invalid or missing token
+
+  /chat/rooms:
+    get:
+      tags: [Chat]
+      summary: Get all chat rooms for authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of chat rooms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rooms:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Room"
+        "401":
+          description: Unauthorized
+    post:
+      tags: [Chat]
+      summary: Create a new group chat or DM
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [GROUP, DM]
+                  description: Type of chat room
+                groupName:
+                  type: string
+                  description: Name of the group chat (for GROUP)
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of user IDs to add (for GROUP)
+                friendId:
+                  type: string
+                  description: User ID of friend (for DM)
+      responses:
+        "200":
+          description: Created chat room
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room:
+                    $ref: "#/components/schemas/Room"
+        "401":
+          description: Unauthorized
+
+  /chat/rooms/{roomId}:
+    patch:
+      tags: [Chat]
+      summary: Edit group chat name and/or description
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: New group name
+                description:
+                  type: string
+                  description: New group description
+      responses:
+        "200":
+          description: Updated room details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updatedRoom:
+                    $ref: "#/components/schemas/Room"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden - not admin
+    delete:
+      tags: [Chat]
+      summary: Delete a group chat (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "204":
+          description: Group deleted successfully
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden - not admin
+
+  /chat/rooms/{roomId}/messages:
+    get:
+      tags: [Chat]
+      summary: Fetch all messages in a chat room
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden - not a member
+
+  /chat/rooms/{roomId}/members/{userId}:
+    delete:
+      tags: [Chat]
+      summary: Remove a member from a group (admin or self)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Member removed successfully
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /chat/rooms/{roomId}/invites:
+    get:
+      tags: [Chat]
+      summary: List invite codes for a group (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      responses:
+        "200":
+          description: List of invite codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invite"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+    post:
+      tags: [Chat]
+      summary: Generate a new invite code (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RoomId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: New invite code generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invite"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /chat/rooms/join-by-code:
+    post:
+      tags: [Chat]
+      summary: Join a group using an invite code
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  description: Invite code
+      responses:
+        "200":
+          description: Joined room details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room:
+                    $ref: "#/components/schemas/Room"
+        "400":
+          description: Invalid or expired invite code
+        "401":
+          description: Unauthorized
+
+  # ============================
+  # === Friends Section APIs ===
+  # ============================
+
+  /friends:
+    get:
+      tags: [Friends]
+      summary: Get the authenticated user's friends list
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of friends
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friends:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Friend"
+        "401":
+          description: Unauthorized
+    delete:
+      tags: [Friends]
+      summary: Remove a friend
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                friendId:
+                  type: string
+                  description: User ID of the friend to remove
+      responses:
+        "204":
+          description: Friend removed
+        "401":
+          description: Unauthorized
+        "404":
+          description: Friend not found
+
+  /friends/requests:
+    get:
+      tags: [Friends]
+      summary: Get pending friend requests (received)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of friend requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FriendRequest"
+        "401":
+          description: Unauthorized
+    post:
+      tags: [Friends]
+      summary: Send a friend request
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                receiverId:
+                  type: string
+                  description: User ID of the person to send a request to
+      responses:
+        "201":
+          description: Friend request sent
+        "400":
+          description: Invalid request
+        "401":
+          description: Unauthorized
+
+  /friends/requests/{requestId}:
+    patch:
+      tags: [Friends]
+      summary: Respond to a friend request (accept or decline)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [accept, decline]
+      responses:
+        "200":
+          description: Friend request responded to
+        "400":
+          description: Invalid action
+        "401":
+          description: Unauthorized
+        "404":
+          description: Request not found
+
+  /friends/search:
+    get:
+      tags: [Friends]
+      summary: Search for users to add as friends
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Username or partial username to search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of users matching search
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UserSearchResult"
+        "401":
+          description: Unauthorized
+
+  # =============================
+  # === Leaderboard Section  ====
+  # =============================
+
+  /leaderboard/{type}:
+    get:
+      tags: [Leaderboard]
+      summary: Get leaderboard entries
+      description: |
+        Returns a list of leaderboard entries for the specified type and order.
+        - `type`: "global" or "friends"
+        - `orderBy`: "eloRating" or "xp"
+        - Authorization is required only if type is 'friends'.
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: Leaderboard type (global or friends)
+          schema:
+            type: string
+            enum: [global, friends]
+        - name: orderBy
+          in: query
+          required: true
+          description: Order by field (eloRating or xp)
+          schema:
+            type: string
+            enum: [eloRating, xp]
+      responses:
+        "200":
+          description: List of leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leaderboard:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeaderboardEntry"
+        "401":
+          description: Unauthorized
+ # ==========================
+  # === Game Section APIs ====
+  # ==========================
+
+  # Fastest Finger
+  /api/fastest-finger/find-match:
+    post:
+      tags: [Game]
+      summary: Find a Fastest Finger match
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                timePerQuestion:
+                  type: integer
+                  description: Time per question in milliseconds
+                  example: 20000
+                duration:
+                  type: integer
+                  description: Game duration in minutes
+                  example: 2
+              required: [timePerQuestion, duration]
+      responses:
+        '200':
+          description: Matchmaking request accepted (match found event will be sent via socket)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Matchmaking started"
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid request
+
+  # Group Play
+  /api/group/create:
+    post:
+      tags: [Game]
+      summary: Create a new group play lobby
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                difficulty:
+                  type: string
+                  enum: [EASY, MEDIUM, HARD]
+                durationMinutes:
+                  type: integer
+                  example: 5
+                maxPlayers:
+                  type: integer
+                  example: 4
+              required: [difficulty, durationMinutes, maxPlayers]
+      responses:
+        '200':
+          description: Lobby created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lobby:
+                    type: object
+                  roomCode:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /api/group/join:
+    post:
+      tags: [Game]
+      summary: Join an existing group play lobby
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roomCode:
+                  type: string
+                  example: "ABCD1234"
+              required: [roomCode]
+      responses:
+        '200':
+          description: Joined lobby
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  roomCode:
+                    type: string
+                  hostId:
+                    type: string
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid room code
+
+  /api/group/initiate-countdown:
+    post:
+      tags: [Game]
+      summary: Start the countdown for group play (host only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roomCode:
+                  type: string
+              required: [roomCode]
+      responses:
+        '200':
+          description: Countdown started
+        '401':
+          description: Unauthorized
+
+  /api/group/cancel-countdown:
+    post:
+      tags: [Game]
+      summary: Cancel the countdown before group play starts (host only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionId:
+                  type: string
+              required: [sessionId]
+      responses:
+        '200':
+          description: Countdown cancelled
+        '401':
+          description: Unauthorized
+
+  /api/group/leave:
+    post:
+      tags: [Game]
+      summary: Leave the group play lobby or game
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionId:
+                  type: string
+                userId:
+                  type: string
+              required: [sessionId, userId]
+      responses:
+        '200':
+          description: Left the lobby/game
+        '401':
+          description: Unauthorized
+
+  # Practice Mode
+  /api/practice/categories:
+    get:
+      tags: [Game]
+      summary: Get available practice categories
+      responses:
+        '200':
+          description: List of available categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+
+  /api/practice/play:
+    post:
+      tags: [Game]
+      summary: Start a new practice session
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                difficulty:
+                  type: string
+                  enum: [EASY, MEDIUM, HARD]
+                categories:
+                  type: array
+                  items:
+                    type: string
+                numQuestions:
+                  type: integer
+                  example: 10
+              required: [difficulty, categories, numQuestions]
+      responses:
+        '200':
+          description: Practice session started (socket event will follow)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Practice session starting"
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid request
+
+  # Quick Duel
+  /api/duel/find-match:
+    post:
+      tags: [Game]
+      summary: Find a Quick Duel match
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                duration:
+                  type: integer
+                  description: Game duration in minutes
+                  example: 2
+              required: [duration]
+      responses:
+        '200':
+          description: Matchmaking request accepted (match found event will be sent via socket)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Matchmaking started"
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid request
+
+  # Time Attack
+  /api/time-attack/play:
+    post:
+      tags: [Game]
+      summary: Start a new Time Attack session
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                difficulty:
+                  type: string
+                  enum: [EASY, MEDIUM, HARD]
+                categories:
+                  type: array
+                  items:
+                    type: string
+                durationMinutes:
+                  type: integer
+                  enum: [1, 2, 5]
+                  example: 1
+              required: [difficulty, categories, durationMinutes]
+      responses:
+        '200':
+          description: Time Attack session started (socket event will follow)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Time Attack session starting"
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid request

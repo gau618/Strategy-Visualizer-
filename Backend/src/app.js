@@ -1,7 +1,17 @@
 import express from 'express'
 import cors from "cors"
 import cookieParser from "cookie-parser";
+import swaggerUi from 'swagger-ui-express';
+import fs from 'fs';
+import yaml from 'js-yaml';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app=express();
 
 const allowedOrigins = [
@@ -38,7 +48,9 @@ app.use('/api/v1/strategies', strategyRouter);
 app.get('/api/v1/health', (req, res) => {
     res.status(200).json({ status: 'Backend is healthy!', timestamp: new Date().toISOString() });
 });
-
+const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yaml', 'utf8'));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.use('/asyncapi', express.static(path.join(__dirname, 'public/asyncapi')));
 
 // Basic error handler (can be made more sophisticated)
 app.use((err, req, res, next) => {

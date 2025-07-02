@@ -20,13 +20,20 @@ const server = http.createServer(app);
 const io = new SocketIOServer(server, {
     cors: { origin: process.env.CORS_ORIGIN || "*" },
 });
-
+  io.on("connection", (socket) => {
+    console.log("(Main Feed) Client connected:", socket.id);
+    socket.on("disconnect", () =>
+      console.log("(Main Feed) Client disconnected:", socket.id)
+    );
+  });
 const PORT = process.env.PORT || 5000; // Changed from APP_PORT to PORT to match your server.js
 connectDB()
   .then(() => {
     server.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
-      setupWebSocket(io);
+      setTimeout(() => {
+        
+      },2000);
     });
   })
   .catch((error) => {
