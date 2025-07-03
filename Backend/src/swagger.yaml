@@ -13,7 +13,7 @@ info:
     - **Game:** All game modes (Fastest Finger, Group Play, Practice, Quick Duel, Time Attack).
 
 servers:
-  - url: https://api.yourdomain.com/api
+  - url: https://quest-quiz.onrender.com/api
     description: Production server
 
 tags:
